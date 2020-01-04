@@ -6,9 +6,10 @@ public class Vehicle implements Runnable {
     int id;
     int posX; // in m
     int speedX; // in m/s
-    int segmentId;
     int LQI;
     int hasRequest;
+    int currentTime;
+    int stopTime;
     Phaser timeSync;
     Medium mediumRef;
     Segment segmentRef;
@@ -17,18 +18,22 @@ public class Vehicle implements Runnable {
     Packet pendingPacket;
     Queue<Packet> messageQueue;
 
-    public Vehicle(int id, int posX, int speedX, Phaser timeSync, Medium mediumRef) {
+    public Vehicle(int id, int posX, int speedX, Phaser timeSync, Medium mediumRef, Segment segmentRef, int stopTime) {
         this.id = id;
+        this.currentTime = 0;
+        this.stopTime = stopTime;
         this.posX = posX;
         this.speedX = speedX;
-        this.timeSync = timeSync;
+        this.LQI = 0;
         this.mediumRef = mediumRef;
+        this.segmentRef = segmentRef;
         // Allot size
         for (int i = 0; i < Config.APPLICATION_TYPE; i++) {
             existingVCs[i] = new HashMap<Integer, Integer>();
         }
+        this.timeSync = timeSync;
         timeSync.register();
-        new Thread(this).start();
+        System.out.println("Vehicle " + id + " initialised.");
     } 
 
     /* Returns false if segment has changed */ 
@@ -41,7 +46,7 @@ public class Vehicle implements Runnable {
     }
 
     public void run() {
-        while (true) {
+        while (currentTime <= stopTime) {
             if (writePending) {
                 timeSync.arriveAndAwaitAdvance();
                 boolean written = mediumRef.write(pendingPacket);
@@ -84,6 +89,7 @@ public class Vehicle implements Runnable {
                 }
             }
             timeSync.arriveAndAwaitAdvance();
+            currentTime++;
         }
     }
 }

@@ -3,7 +3,11 @@ import java.util.concurrent.Phaser;
 
 public class RoadSideUnit implements Runnable {
     int id;
+    int posX;
+    int LQI;
     Phaser timeSync;
+    int currentTime;
+    int stopTime;
     boolean writePending;
     Packet pendingPacket;
     Queue<Packet> messageQueue;
@@ -11,8 +15,21 @@ public class RoadSideUnit implements Runnable {
     Medium mediumRef;
     Segment segmentRef;
 
+    public RoadSideUnit(int id, int posX, Phaser timeSync, Medium mediumRef, Segment segmentRef, int stopTime) {
+        this.id = id;
+        this.posX = posX;
+        this.LQI = 0;
+        this.currentTime = 0;
+        this.stopTime = stopTime;
+        this.mediumRef = mediumRef;
+        this.segmentRef = segmentRef;
+        this.timeSync = timeSync;
+        timeSync.register();
+        System.out.println("RSU " + id + " initialised.");
+    }
+    
     public void run() {
-        while (true) {
+        while (currentTime <= stopTime) {
             if (writePending) {
                 timeSync.arriveAndAwaitAdvance();
                 boolean written = mediumRef.write(pendingPacket);
@@ -41,6 +58,7 @@ public class RoadSideUnit implements Runnable {
                 }
             }
             timeSync.arriveAndAwaitAdvance();
+            currentTime++;
         }
     }
 }
