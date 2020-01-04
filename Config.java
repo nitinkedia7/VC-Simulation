@@ -9,7 +9,7 @@ public class Config {
         RREQ, RREP, RJOIN;
     }
     static boolean useFair = true;
-    static int APPLICATION_TYPE = 5;
+    static int APPLICATION_TYPE_COUNT = 5;
     static int TRY_LOCK_WAIT_TIME = 100;
-    static int STOP_TIME = 20;
+    static int STOP_TIME = 1;
 }

@@ -47,4 +47,9 @@ public class Medium {
         }   
         else return null;
     }
+
+    // public static void main(String[] args) {
+    //     Medium medium = new Medium();
+    //     System.out.println(medium.read(0));
+    // }
 }

@@ -32,12 +32,13 @@ public class Segment implements Runnable {
     public void run() {
         new Thread(rsu).start();
         for (int i = 1; i <= Config.VEHICLE_COUNT; i++) {
-            new Thread(vehicles.get(i)).start();
+            new Thread(vehicles.get(i-1)).start();
         }
         while (currentTime <= stopTime) {
+            System.out.println("Segment " + id + " starting interval " + currentTime);
             timeSync.arriveAndAwaitAdvance();
             currentTime++;
         }
-        System.out.println("Segment " + id + " stopped after " + stopTime + " timeUnits");   
+        System.out.println("Segment " + id + " stopped after " + stopTime + " ms.");   
     }
 }

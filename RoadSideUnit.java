@@ -25,21 +25,20 @@ public class RoadSideUnit implements Runnable {
         this.segmentRef = segmentRef;
         this.timeSync = timeSync;
         timeSync.register();
-        System.out.println("RSU " + id + " initialised.");
+        System.out.println("RSU     " + id + " initialised.");
     }
     
     public void run() {
         while (currentTime <= stopTime) {
+            System.out.println("RSU     " + id + " starting interval " + currentTime);
             if (writePending) {
-                timeSync.arriveAndAwaitAdvance();
                 boolean written = mediumRef.write(pendingPacket);
                 if (written) {
                     writePending = false;
                     pendingPacket = null;
                 }
             }
-            timeSync.arriveAndAwaitAdvance();
-            if (!writePending) {
+            else {
                 // 1. Read pending requests
                 messageQueue = mediumRef.read(id);
                 while (messageQueue != null && !messageQueue.isEmpty()) {
@@ -60,5 +59,6 @@ public class RoadSideUnit implements Runnable {
             timeSync.arriveAndAwaitAdvance();
             currentTime++;
         }
+        System.out.println("RSU     " + id + " stopped after " + stopTime + " ms.");   
     }
 }

@@ -13,7 +13,7 @@ public class Vehicle implements Runnable {
     Phaser timeSync;
     Medium mediumRef;
     Segment segmentRef;
-    Map<Integer, Integer>[] existingVCs;
+    List<Map<Integer, Integer>> existingVCs;
     boolean writePending;
     Packet pendingPacket;
     Queue<Packet> messageQueue;
@@ -28,8 +28,9 @@ public class Vehicle implements Runnable {
         this.mediumRef = mediumRef;
         this.segmentRef = segmentRef;
         // Allot size
-        for (int i = 0; i < Config.APPLICATION_TYPE; i++) {
-            existingVCs[i] = new HashMap<Integer, Integer>();
+        existingVCs = new ArrayList<Map<Integer, Integer>>();
+        for (int i = 0; i < Config.APPLICATION_TYPE_COUNT; i++) {
+            existingVCs.add(new HashMap<Integer, Integer>());
         }
         this.timeSync = timeSync;
         timeSync.register();
@@ -39,24 +40,23 @@ public class Vehicle implements Runnable {
     /* Returns false if segment has changed */ 
     public boolean updatePosition() {
         posX += speedX;
-        int segmentStart = Config.SEGMENT_LENGTH * segmentId;
-        int segmentEnd = Config.SEGMENT_LENGTH * (segmentId + 1);
+        int segmentStart = Config.SEGMENT_LENGTH * segmentRef.id;
+        int segmentEnd = Config.SEGMENT_LENGTH * (segmentRef.id + 1);
         if (posX < segmentStart || posX > segmentEnd) return false;
         return true;
     }
 
     public void run() {
         while (currentTime <= stopTime) {
+            System.out.println("Vehicle " + id + " starting interval " + currentTime);
             if (writePending) {
-                timeSync.arriveAndAwaitAdvance();
                 boolean written = mediumRef.write(pendingPacket);
                 if (written) {
                     writePending = false;
                     pendingPacket = null;
                 }
             }   
-            timeSync.arriveAndAwaitAdvance();
-            if (!writePending) {
+            else {
                 // 1. Read medium queue
                 messageQueue = mediumRef.read(id);
                 while (messageQueue != null && !messageQueue.isEmpty()) {
@@ -67,7 +67,7 @@ public class Vehicle implements Runnable {
                             pendingPacket = Packet.generateRREPPacket(id, segmentRef.currentTime, LQI, p.appId);
                             break;
                         case RJOIN:
-                            existingVCs[p.appId].put(p.senderId, p.LQI);
+                            existingVCs.get(p.appId).put(p.senderId, p.LQI);
                             break;
                         case RREP:
                             break;
@@ -76,8 +76,8 @@ public class Vehicle implements Runnable {
                 // 2. (Randomly) Request for an application
                 hasRequest = ThreadLocalRandom.current().nextInt(1);
                 if (hasRequest == 1) {
-                    int appType = ThreadLocalRandom.current().nextInt(Config.APPLICATION_TYPE);
-                    if (!existingVCs[appType].isEmpty()) {
+                    int appType = ThreadLocalRandom.current().nextInt(Config.APPLICATION_TYPE_COUNT);
+                    if (!existingVCs.get(appType).isEmpty()) {
                         // Join VC by broadcasting ones LQI
                         writePending = true;
                         pendingPacket = Packet.generateRJOINPacket(id, segmentRef.currentTime, LQI, appType);
@@ -91,5 +91,6 @@ public class Vehicle implements Runnable {
             timeSync.arriveAndAwaitAdvance();
             currentTime++;
         }
+        System.out.println("Vehicle " + id + " stopped after " + stopTime + " ms.");   
     }
 }
