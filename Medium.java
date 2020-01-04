@@ -29,20 +29,22 @@ public class Medium {
         }
     }
 
+    // Add Packet to each vehicle's message queue
     public boolean write(Packet newPacket) {
         if (tryWriteLock()) {
-            messageQueue.add(newPacket);
+            for (Integer vid : messages.keySet()) {
+                (messages.get(vid)).add(newPacket);
+            }
             return true;
         }
         else return false;
     }
 
-    public boolean read() {
+    // Returns a reference to the private queue of a vehicle
+    public Queue<Packet> read(int id) {
         if (tryReadLock()) {
-            if (messageQueue.isEmpty()) return false;
-            
-            return true;
+            return messages.getOrDefault(id, null);
         }   
-        else return true;
+        else return null;
     }
 }

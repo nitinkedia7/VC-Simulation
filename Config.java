@@ -5,7 +5,7 @@ public class Config {
     static int RSU_RANGE = 300;
     static int VEHICLE_RANGE = 300;
     static enum PACKET_TYPE {
-        RREQ, RRES, RJOIN;
+        RREQ, RREP, RJOIN;
     }
     static boolean useFair = true;
     static int APPLICATION_TYPE = 5;

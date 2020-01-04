@@ -26,4 +26,10 @@ public class Packet {
         return rreqPacket;
     }
 
+    public static Packet generateRREPPacket(int senderId, int sentTime, int LQI, int appId) {
+        Packet rrepPacket = new Packet(Config.PACKET_TYPE.RREQ, senderId, sentTime);
+        rrepPacket.LQI = LQI;
+        rrepPacket.appId = appId; 
+        return rrepPacket;
+    }
 }

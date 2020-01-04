@@ -12,9 +12,10 @@ public class Vehicle implements Runnable {
     Phaser timeSync;
     Medium mediumRef;
     Segment segmentRef;
-    Set<Integer> existingVCs;
+    Map<Integer, Integer>[] existingVCs;
     boolean writePending;
     Packet pendingPacket;
+    Queue<Packet> messageQueue;
 
     public Vehicle(int id, int posX, int speedX, Phaser timeSync, Medium mediumRef) {
         this.id = id;
@@ -22,7 +23,10 @@ public class Vehicle implements Runnable {
         this.speedX = speedX;
         this.timeSync = timeSync;
         this.mediumRef = mediumRef;
-        this.existingVCs = new TreeSet<Integer>();
+        // Allot size
+        for (int i = 0; i < Config.APPLICATION_TYPE; i++) {
+            existingVCs[i] = new HashMap<Integer, Integer>();
+        }
         timeSync.register();
         new Thread(this).start();
     } 
@@ -39,20 +43,36 @@ public class Vehicle implements Runnable {
     public void run() {
         while (true) {
             if (writePending) {
+                timeSync.arriveAndAwaitAdvance();
                 boolean written = mediumRef.write(pendingPacket);
                 if (written) {
                     writePending = false;
                     pendingPacket = null;
                 }
             }   
-            else {
+            timeSync.arriveAndAwaitAdvance();
+            if (!writePending) {
                 // 1. Read medium queue
-                
+                messageQueue = mediumRef.read(id);
+                while (messageQueue != null && !messageQueue.isEmpty()) {
+                    Packet p = messageQueue.poll();
+                    switch (p.type) {
+                        case RREQ:
+                            writePending = true;
+                            pendingPacket = Packet.generateRREPPacket(id, segmentRef.currentTime, LQI, p.appId);
+                            break;
+                        case RJOIN:
+                            existingVCs[p.appId].put(p.senderId, p.LQI);
+                            break;
+                        case RREP:
+                            break;
+                    }
+                }
                 // 2. (Randomly) Request for an application
                 hasRequest = ThreadLocalRandom.current().nextInt(1);
                 if (hasRequest == 1) {
                     int appType = ThreadLocalRandom.current().nextInt(Config.APPLICATION_TYPE);
-                    if (existingVCs.contains(appType)) {
+                    if (!existingVCs[appType].isEmpty()) {
                         // Join VC by broadcasting ones LQI
                         writePending = true;
                         pendingPacket = Packet.generateRJOINPacket(id, segmentRef.currentTime, LQI, appType);
