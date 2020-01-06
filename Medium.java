@@ -33,8 +33,10 @@ public class Medium {
     public boolean write(Packet newPacket) {
         if (tryWriteLock()) {
             for (Integer vid : messages.keySet()) {
-                (messages.get(vid)).add(newPacket);
+                messages.get(vid).add(newPacket);
             }
+            mediumLock.writeLock().unlock();
+            System.out.println("Packet " + newPacket.id + ": Sender " + newPacket.senderId + " generated " + newPacket.type + " at " + newPacket.sentTime);
             return true;
         }
         else return false;
@@ -43,7 +45,9 @@ public class Medium {
     // Returns a reference to the private queue of a vehicle
     public Queue<Packet> read(int id) {
         if (tryReadLock()) {
-            return messages.getOrDefault(id, null);
+            Queue<Packet> vehicleQueue = messages.getOrDefault(id, null);
+            mediumLock.readLock().unlock();
+            return vehicleQueue;
         }   
         else return null;
     }
