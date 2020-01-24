@@ -54,7 +54,7 @@ public class RoadSideUnit implements Runnable {
             pendingRequests.put(appId, new ArrayList<Packet>());
         }
         pendingRequests.get(appId).add(newPacket);
-        if (pendingRequests.get(appId).size() >= Config.MIN_CLOUD_SIZE) {
+        if (pendingRequests.get(appId).size() >= Config.VEHICLE_COUNT) {
             existingVCs.put(appId, pendingRequests.get(appId));
             pendingRequests.remove(appId);
         }
@@ -65,7 +65,7 @@ public class RoadSideUnit implements Runnable {
     
     public void run() {
         while (currentTime <= stopTime) {
-            System.out.println("RSU     " + id + " starting interval " + currentTime);
+            // System.out.println("RSU     " + id + " starting interval " + currentTime);
             if (writePending) {
                 boolean written = mediumRef.write(pendingPacket);
                 if (written) {
@@ -78,6 +78,7 @@ public class RoadSideUnit implements Runnable {
                 messageQueue = mediumRef.read(id);
                 while (messageQueue != null && !messageQueue.isEmpty()) {
                     Packet p = messageQueue.poll();
+                    System.out.println("Packet " + p.id + ": RSU    " + id + " read " + p.type + " from " + p.senderId + " at " + p.sentTime);
                     switch (p.type) {
                         case RREQ:
                             handleNewRequest(p);

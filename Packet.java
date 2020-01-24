@@ -8,10 +8,10 @@ public class Packet {
     int senderId;
     int sentTime;          
     int cloudId;
-    List<Integer> memberList;       
+    List<Integer> memberList;
 
     public Packet(Config.PACKET_TYPE type, int senderId, int sentTime, int LQI, int appId, List<Integer> memberList) {
-        this.id += 1;
+        // this.id += 1;
         this.type = type;
         this.senderId = senderId;   
         this.sentTime = sentTime;

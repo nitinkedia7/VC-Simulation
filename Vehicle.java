@@ -44,7 +44,7 @@ public class Vehicle implements Runnable {
 
     public void run() {
         while (currentTime <= stopTime) {
-            System.out.println("Vehicle " + id + " starting interval " + currentTime);
+            // System.out.println("Vehicle " + id + " starting interval " + currentTime);
             if (writePending) {
                 boolean written = mediumRef.write(pendingPacket);
                 if (written) {
@@ -54,11 +54,11 @@ public class Vehicle implements Runnable {
             }   
             else {
                 // 1. (Randomly) Request for an application
-                int hasRequest = ThreadLocalRandom.current().nextInt(2);
+                int hasRequest = ThreadLocalRandom.current().nextInt(5);
                 if (hasRequest == 1) {
                     // System.out.println("GEN");
                     int appType = ThreadLocalRandom.current().nextInt(Config.APPLICATION_TYPE_COUNT);
-                    if (!existingVCs.get(appType).isEmpty()) {
+                    if (existingVCs.getOrDefault(appType, null) != null) {
                         // Join VC by broadcasting ones LQI
                         writePending = true;
                         pendingPacket = new Packet(Config.PACKET_TYPE.RJOIN, id, currentTime, LQI, appType, null);
@@ -72,6 +72,7 @@ public class Vehicle implements Runnable {
                 messageQueue = mediumRef.read(id);
                 while (!writePending && messageQueue != null && !messageQueue.isEmpty()) {
                     Packet p = messageQueue.poll();
+                    System.out.println("Packet " + p.id + ": Vehicle " + id + " read " + p.type + " from " + p.senderId + " at " + p.sentTime);
                     switch (p.type) {
                         case RREQ:
                             writePending = true;

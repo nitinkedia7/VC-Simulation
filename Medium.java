@@ -8,6 +8,9 @@ public class Medium {
 
     public Medium() {
         messages = new HashMap<Integer, Queue<Packet>>();
+        for (int i = 0; i <= Config.VEHICLE_COUNT; i++) {
+            messages.put(i, new LinkedList<Packet>());
+        }
         mediumLock = new ReentrantReadWriteLock(Config.useFair);
     }
 
@@ -36,7 +39,7 @@ public class Medium {
                 messages.get(vid).add(newPacket);
             }
             mediumLock.writeLock().unlock();
-            System.out.println("Packet " + newPacket.id + ": Sender " + newPacket.senderId + " generated " + newPacket.type + " at " + newPacket.sentTime);
+            System.out.println("Packet " + newPacket.id + ": Sender " + newPacket.senderId + " wrote " + newPacket.type + " at " + newPacket.sentTime);
             return true;
         }
         else return false;
