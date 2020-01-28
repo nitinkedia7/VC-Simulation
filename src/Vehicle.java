@@ -72,7 +72,7 @@ public class Vehicle implements Runnable {
                 messageQueue = mediumRef.read(id);
                 while (!writePending && messageQueue != null && !messageQueue.isEmpty()) {
                     Packet p = messageQueue.poll();
-                    System.out.println("Packet " + p.id + ": Vehicle " + id + " read " + p.type + " from " + p.senderId + " at " + p.sentTime);
+                    System.out.println("Packet " + ": Vehicle " + id + " read " + p.type + " from " + p.senderId + " at " + p.sentTime);
                     switch (p.type) {
                         case RREQ:
                             writePending = true;

@@ -11,5 +11,5 @@ public class Config {
     static boolean useFair = true;
     static int APPLICATION_TYPE_COUNT = 5;
     static int TRY_LOCK_WAIT_TIME = 100;
-    static int STOP_TIME = 5;
+    static int STOP_TIME = 18000;
 }

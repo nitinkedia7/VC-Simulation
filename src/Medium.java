@@ -39,7 +39,7 @@ public class Medium {
                 messages.get(vid).add(newPacket);
             }
             mediumLock.writeLock().unlock();
-            System.out.println("Packet " + newPacket.id + ": Sender " + newPacket.senderId + " wrote " + newPacket.type + " at " + newPacket.sentTime);
+            System.out.println("Packet " + ": Sender " + newPacket.senderId + " wrote " + newPacket.type + " at " + newPacket.sentTime);
             return true;
         }
         else return false;
