@@ -1,3 +1,5 @@
+package src;
+
 public class Config {
     static int ROAD_LENGTH = 40000;
     static int SEGMENT_LENGTH = 600;

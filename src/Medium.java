@@ -1,3 +1,5 @@
+package src;
+
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.*;
@@ -36,6 +38,7 @@ public class Medium {
     public boolean write(Packet newPacket) {
         if (tryWriteLock()) {
             for (Integer vid : messages.keySet()) {
+                if (vid == newPacket.senderId) continue;
                 messages.get(vid).add(newPacket);
             }
             mediumLock.writeLock().unlock();

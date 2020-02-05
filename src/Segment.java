@@ -1,3 +1,5 @@
+package src;
+
 import java.util.ArrayList;
 import java.util.concurrent.Phaser;
 
@@ -35,7 +37,7 @@ public class Segment implements Runnable {
             new Thread(vehicles.get(i-1)).start();
         }
         while (currentTime <= stopTime) {
-            System.out.println("Segment " + id + " starting interval " + currentTime);
+            System.out.println("\nSegment " + id + " starting interval " + currentTime);
             timeSync.arriveAndAwaitAdvance();
             currentTime++;
         }

@@ -1,3 +1,5 @@
+package src;
+
 import java.util.*;
 import java.util.concurrent.Phaser;
 import java.util.concurrent.ThreadLocalRandom;
@@ -12,7 +14,7 @@ public class Vehicle implements Runnable {
     Phaser timeSync;
     Medium mediumRef;
     Segment segmentRef;
-    Map<Integer, List<Integer>> existingVCs;
+    Map<Integer, List<Packet>> existingVCs;
     boolean writePending;
     Packet pendingPacket;
     Queue<Packet> messageQueue;
@@ -27,7 +29,7 @@ public class Vehicle implements Runnable {
         this.mediumRef = mediumRef;
         this.segmentRef = segmentRef;
         this.writePending = false;
-        existingVCs = new HashMap<Integer, List<Integer>>();
+        existingVCs = new HashMap<Integer, List<Packet>>();
         this.timeSync = timeSync;
         timeSync.register();
         System.out.println("Vehicle " + id + " initialised.");
@@ -40,6 +42,17 @@ public class Vehicle implements Runnable {
         int segmentEnd = Config.SEGMENT_LENGTH * (segmentRef.id + 1);
         if (posX < segmentStart || posX > segmentEnd) return false;
         return true;
+    }
+
+    public void handleRJOIN(Packet newPacket) {
+        // VC for requested app id must be present
+        int appId = newPacket.appId;
+        if (existingVCs.containsKey(appId)) {
+            existingVCs.get(appId).add(newPacket);
+        } 
+        else {
+            // ERROR
+        }
     }
 
     public void run() {
@@ -62,6 +75,7 @@ public class Vehicle implements Runnable {
                         // Join VC by broadcasting ones LQI
                         writePending = true;
                         pendingPacket = new Packet(Config.PACKET_TYPE.RJOIN, id, currentTime, LQI, appType, null);
+                        existingVCs.get(appType).add(pendingPacket);
                     } 
                     else {
                         writePending = true;
@@ -71,7 +85,11 @@ public class Vehicle implements Runnable {
                 // 2. Read medium queue
                 messageQueue = mediumRef.read(id);
                 while (!writePending && messageQueue != null && !messageQueue.isEmpty()) {
+                    System.out.println(messageQueue.size());
                     Packet p = messageQueue.poll();
+                    if (p == null) {
+                        System.out.println("read packet is NULL");
+                    }
                     System.out.println("Packet " + ": Vehicle " + id + " read " + p.type + " from " + p.senderId + " at " + p.sentTime);
                     switch (p.type) {
                         case RREQ:
@@ -79,6 +97,7 @@ public class Vehicle implements Runnable {
                             pendingPacket = new Packet(Config.PACKET_TYPE.RREP, id, currentTime, LQI, p.appId, null);
                             break;
                         case RJOIN:
+                            handleRJOIN(p);
                             break;
                         case RREP:
                             break;

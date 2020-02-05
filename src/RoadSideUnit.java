@@ -1,3 +1,5 @@
+package src;
+
 import java.util.*;
 import java.util.concurrent.Phaser;
 
@@ -64,8 +66,19 @@ public class RoadSideUnit implements Runnable {
             for (int i = 0; i < li.size(); i++) {
                 System.out.print(li.get(i).senderId + " ");
             }        
-            System.out.println(".");
+            System.out.println(" for app id " + appId);
             return;
+        }
+    }
+
+    public void handleRJOIN(Packet newPacket) {
+        // VC for requested app id must be present
+        int appId = newPacket.appId;
+        if (existingVCs.containsKey(appId)) {
+            existingVCs.get(appId).add(newPacket);
+        } 
+        else {
+            // ERROR
         }
     }
     
@@ -83,7 +96,11 @@ public class RoadSideUnit implements Runnable {
                 // 1. Read pending requests
                 messageQueue = mediumRef.read(id);
                 while (messageQueue != null && !messageQueue.isEmpty()) {
+                    System.out.println(messageQueue.size());
                     Packet p = messageQueue.poll();
+                    if (p == null) {
+                        System.out.println("read packet is NULL");
+                    }
                     System.out.println("Packet " + ": RSU    " + id + " read " + p.type + " from " + p.senderId + " at " + p.sentTime);
                     switch (p.type) {
                         case RREQ:
@@ -93,6 +110,7 @@ public class RoadSideUnit implements Runnable {
                             handleNewRequest(p);
                             break;
                         case RJOIN:
+                            handleRJOIN(p);
                             break;
                         case RACK:
                             break;

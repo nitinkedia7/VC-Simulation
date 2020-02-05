@@ -1,3 +1,5 @@
+package src;
+
 import java.util.*;
 
 public class Packet {
@@ -7,9 +9,9 @@ public class Packet {
     int senderId;
     int sentTime;          
     int cloudId;
-    List<Integer> memberList;
+    List<Packet> memberList;
 
-    public Packet(Config.PACKET_TYPE type, int senderId, int sentTime, int LQI, int appId, List<Integer> memberList) {
+    public Packet(Config.PACKET_TYPE type, int senderId, int sentTime, int LQI, int appId, List<Packet> memberList) {
         this.type = type;
         this.senderId = senderId;   
         this.sentTime = sentTime;
