@@ -21,9 +21,7 @@ public class RoadSideUnit implements Runnable {
     boolean writePending;
     Packet pendingPacket;
     Queue<Packet> messageQueue;
-    // for each appId need a list of rreps
-    Map<Integer, List<Packet>> existingVCs;
-    Map<Integer, List<Packet>> pendingRequests;
+    Map<Integer, Cloud> clouds;
     Medium mediumRef;
     Segment segmentRef;
 
@@ -36,52 +34,37 @@ public class RoadSideUnit implements Runnable {
         this.mediumRef = mediumRef;
         this.segmentRef = segmentRef;
         this.writePending = false;
-        existingVCs = new HashMap<Integer, List<Packet>>();
-        pendingRequests = new HashMap<Integer, List<Packet>>();
+        clouds = new HashMap<Integer, Cloud>();
         this.timeSync = timeSync;
         timeSync.register();
         System.out.println("RSU     " + id + " initialised.");
     }
 
-    public void handleNewRequest(Packet newPacket) {
-        int appId = newPacket.appId;
-        // VC for that appId already exists
-        if (existingVCs.containsKey(appId)) {
-            writePending = false;
-            pendingPacket = null;
+    public void handleRJOIN(Packet newPacket) {
+       // TODO
+    }
+
+    public void handleRREQ(Packet reqPacket) {
+        int appId = reqPacket.appId;
+        if (clouds.containsKey(appId)) {
             return;
         }
-        // No VC exists for that appID
-        if (!pendingRequests.containsKey(appId)) {
-            pendingRequests.put(appId, new ArrayList<Packet>());
-        }
-        pendingRequests.get(appId).add(newPacket);
-        if (pendingRequests.get(appId).size() >= Config.VEHICLE_COUNT) {
-            existingVCs.put(appId, pendingRequests.get(appId));
-            pendingRequests.remove(appId);
+        clouds.put(appId, new Cloud(reqPacket));
+        // Also add the requestor as a donor
+        handleRREP(reqPacket);
+    }
+
+    public void handleRREP(Packet donorPacket) {
+        int appId = donorPacket.appId;
+        assert clouds.containsKey(appId) : "No cloud present for app " + appId;
+        clouds.get(appId).addMember(donorPacket);
+        if (clouds.get(appId).metResourceQuota()) {
             writePending = true;
-            pendingPacket = new Packet(Config.PACKET_TYPE.RACK, id, currentTime, LQI, appId, null);
-            System.out.print("Cloud generated with members ");
-            List<Packet> li = existingVCs.get(appId);
-            for (int i = 0; i < li.size(); i++) {
-                System.out.print(li.get(i).senderId + " ");
-            }        
-            System.out.println(" for app id " + appId);
-            return;
+            pendingPacket = new Packet(Config.PACKET_TYPE.RACK, id, currentTime, appId, clouds.get(appId));
+            clouds.get(appId).printStats();
         }
     }
 
-    public void handleRJOIN(Packet newPacket) {
-        // VC for requested app id must be present
-        int appId = newPacket.appId;
-        if (existingVCs.containsKey(appId)) {
-            existingVCs.get(appId).add(newPacket);
-        } 
-        else {
-            // ERROR
-        }
-    }
-    
     public void run() {
         while (currentTime <= stopTime) {
             // System.out.println("RSU     " + id + " starting interval " + currentTime);
@@ -104,15 +87,16 @@ public class RoadSideUnit implements Runnable {
                     System.out.println("Packet " + ": RSU    " + id + " read " + p.type + " from " + p.senderId + " at " + p.sentTime);
                     switch (p.type) {
                         case RREQ:
-                            handleNewRequest(p);
+                            handleRREQ(p);
                             break;
                         case RREP:
-                            handleNewRequest(p);
+                            handleRREP(p);
                             break;
                         case RJOIN:
                             handleRJOIN(p);
                             break;
                         case RACK:
+                            // RSU sends RACK, not process it
                             break;
                     }
                 }

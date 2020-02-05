@@ -24,6 +24,8 @@ Instead of a hard segment approach followed currently for each interval first up
 [2] For Graph 3 will constant vehicle speed will work or the average speed should be varied.
 Discuss the implementation of how the vehicles will move, when LEAVE message will be generated.
 
+Gouping by application category. Suppose two RREQ's come simultaneously for an appiId without a VC. Then RSU will remove one of the requests or join them?
+
 # Bugs
 1. Sender itself is reading its packet in the next cycle. DONE
 ```

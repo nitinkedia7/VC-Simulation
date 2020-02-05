@@ -14,10 +14,11 @@ public class Vehicle implements Runnable {
     Phaser timeSync;
     Medium mediumRef;
     Segment segmentRef;
-    Map<Integer, List<Packet>> existingVCs;
+    Map<Integer, Cloud> existingVCs;
     boolean writePending;
     Packet pendingPacket;
     Queue<Packet> messageQueue;
+    int availableResources;
 
     public Vehicle(int id, int posX, int speedX, Phaser timeSync, Medium mediumRef, Segment segmentRef, int stopTime) {
         this.id = id;
@@ -29,7 +30,8 @@ public class Vehicle implements Runnable {
         this.mediumRef = mediumRef;
         this.segmentRef = segmentRef;
         this.writePending = false;
-        existingVCs = new HashMap<Integer, List<Packet>>();
+        existingVCs = new HashMap<Integer, Cloud>();
+        this.availableResources = Config.MAX_RESOURCE_QUOTA;
         this.timeSync = timeSync;
         timeSync.register();
         System.out.println("Vehicle " + id + " initialised.");
@@ -48,11 +50,15 @@ public class Vehicle implements Runnable {
         // VC for requested app id must be present
         int appId = newPacket.appId;
         if (existingVCs.containsKey(appId)) {
-            existingVCs.get(appId).add(newPacket);
+            existingVCs.get(appId).addMember(newPacket);
         } 
         else {
             // ERROR
         }
+    }
+
+    public int getDonatedResources() {
+        return ThreadLocalRandom.current().nextInt(availableResources);
     }
 
     public void run() {
@@ -69,41 +75,41 @@ public class Vehicle implements Runnable {
                 // 1. (Randomly) Request for an application
                 int hasRequest = ThreadLocalRandom.current().nextInt(5);
                 if (hasRequest == 1) {
-                    // System.out.println("GEN");
                     int appType = ThreadLocalRandom.current().nextInt(Config.APPLICATION_TYPE_COUNT);
-                    if (existingVCs.getOrDefault(appType, null) != null) {
-                        // Join VC by broadcasting ones LQI
+                    if (existingVCs.getOrDefault(appType, null) != null) { // RJOIN
                         writePending = true;
-                        pendingPacket = new Packet(Config.PACKET_TYPE.RJOIN, id, currentTime, LQI, appType, null);
-                        existingVCs.get(appType).add(pendingPacket);
+                        pendingPacket = new Packet(Config.PACKET_TYPE.RJOIN, id, currentTime, LQI, appType, getDonatedResources());
+                        handleRJOIN(pendingPacket);
                     } 
-                    else {
+                    else { // RREQ
                         writePending = true;
-                        pendingPacket = new Packet(Config.PACKET_TYPE.RREQ, id, currentTime, LQI, appType, null);
+                        pendingPacket = new Packet(Config.PACKET_TYPE.RREQ, id, currentTime, LQI, appType, Config.MAX_RESOURCE_QUOTA , getDonatedResources());
                     }
                 }
                 // 2. Read medium queue
                 messageQueue = mediumRef.read(id);
                 while (!writePending && messageQueue != null && !messageQueue.isEmpty()) {
-                    System.out.println(messageQueue.size());
                     Packet p = messageQueue.poll();
-                    if (p == null) {
-                        System.out.println("read packet is NULL");
-                    }
+                    assert p != null : "Read packet is NULL";                    
                     System.out.println("Packet " + ": Vehicle " + id + " read " + p.type + " from " + p.senderId + " at " + p.sentTime);
+                    
                     switch (p.type) {
                         case RREQ:
-                            writePending = true;
-                            pendingPacket = new Packet(Config.PACKET_TYPE.RREP, id, currentTime, LQI, p.appId, null);
+                            int donatedResources = getDonatedResources();
+                            if (donatedResources > 0) {
+                                availableResources -= donatedResources;
+                                writePending = true;
+                                pendingPacket = new Packet(Config.PACKET_TYPE.RREP, id, currentTime, LQI, p.appId, donatedResources);
+                            }
                             break;
                         case RJOIN:
                             handleRJOIN(p);
                             break;
                         case RREP:
+                            // Currently RSU handles RREP's
                             break;
                         case RACK:
-                            // cloud has been formed
-                            existingVCs.put(p.appId, p.memberList);
+                            existingVCs.put(p.appId, p.cloud);
                             break;
                     }
                 }
