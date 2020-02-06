@@ -19,6 +19,22 @@ public class Vehicle implements Runnable {
     Packet pendingPacket;
     Queue<Packet> messageQueue;
     int availableResources;
+    
+    class ProcessBlock {
+        int completionTime;
+        int appId;
+
+        public ProcessBlock(int appId, int donatedResources) {
+            if (currentTime > bookedTillTime) {
+                bookedTillTime = currentTime;
+            }
+            bookedTillTime += donatedResources * Config.PROCESSING_SPEED;
+            this.completionTime = bookedTillTime;
+            this.appId = appId;  
+        }
+    }
+    int bookedTillTime;
+    Queue<ProcessBlock> processQueue;
 
     public Vehicle(int id, int posX, int speedX, Phaser timeSync, Medium mediumRef, Segment segmentRef, int stopTime) {
         this.id = id;
@@ -32,6 +48,9 @@ public class Vehicle implements Runnable {
         this.writePending = false;
         existingVCs = new HashMap<Integer, Cloud>();
         this.availableResources = Config.MAX_RESOURCE_QUOTA;
+        this.bookedTillTime = 0;
+        processQueue = new LinkedList<ProcessBlock>();
+
         this.timeSync = timeSync;
         timeSync.register();
         System.out.println("Vehicle " + id + " initialised.");
@@ -46,15 +65,51 @@ public class Vehicle implements Runnable {
         return true;
     }
 
-    public void handleRJOIN(Packet newPacket) {
-        // VC for requested app id must be present
-        int appId = newPacket.appId;
-        if (existingVCs.containsKey(appId)) {
-            existingVCs.get(appId).addMember(newPacket);
-        } 
-        else {
-            // ERROR
+    public void handleRREQ(Packet p) {
+        int donatedResources = getDonatedResources();
+        if (donatedResources > 0) {
+            availableResources -= donatedResources;
+            writePending = true;
+            pendingPacket = new Packet(Config.PACKET_TYPE.RREP, id, currentTime, LQI, p.appId, donatedResources);
         }
+    }
+
+    public void handleRACK(Packet ackPacket) {
+        // Save this cloud
+        Cloud cloud = ackPacket.cloud;
+        existingVCs.put(ackPacket.appId, cloud);
+        if (isCloudLeader(cloud)) {
+            cloud.workingMemberCount = cloud.members.size();
+            writePending = true;
+            pendingPacket = new Packet(Config.PACKET_TYPE.PSTART, id, currentTime, cloud.appId);
+        }
+    }
+    
+    public void handlePSTART(Packet startPacket) {
+        // Add an alarm for contribution
+        int donatedResources = startPacket.cloud.getDonatedAmount(id);
+        if (donatedResources > 0) {
+            processQueue.add(new ProcessBlock(startPacket.appId, donatedResources));
+        }
+        return;
+    }
+
+    public void handlePDONE(Packet donePacket) {
+        Cloud cloud = existingVCs.get(donePacket.appId);
+        if (!isCloudLeader(cloud)) return;
+        cloud.markAsDone(donePacket.senderId);
+        if (cloud.workingMemberCount == 0) {
+            writePending = true;
+            pendingPacket = new Packet(Config.PACKET_TYPE.RTEAR, id, currentTime, donePacket.appId);
+        }
+    }
+
+    public void handleRJOIN(Packet newPacket) {
+        // TODO
+    }
+
+    public Boolean isCloudLeader(Cloud cloud) {
+        return cloud != null && cloud.requestorId == id;  
     }
 
     public int getDonatedResources() {
@@ -64,7 +119,15 @@ public class Vehicle implements Runnable {
     public void run() {
         while (currentTime <= stopTime) {
             // System.out.println("Vehicle " + id + " starting interval " + currentTime);
-            if (writePending) {
+            if (!processQueue.isEmpty()) {
+                ProcessBlock nextBlock = processQueue.peek();
+                if (currentTime >= nextBlock.completionTime) {
+                    writePending = true;
+                    pendingPacket = new Packet(Config.PACKET_TYPE.PDONE, id, currentTime, nextBlock.appId);
+                    processQueue.remove();
+                }
+            }
+            else if (writePending) {
                 boolean written = mediumRef.write(pendingPacket);
                 if (written) {
                     writePending = false;
@@ -95,21 +158,28 @@ public class Vehicle implements Runnable {
                     
                     switch (p.type) {
                         case RREQ:
-                            int donatedResources = getDonatedResources();
-                            if (donatedResources > 0) {
-                                availableResources -= donatedResources;
-                                writePending = true;
-                                pendingPacket = new Packet(Config.PACKET_TYPE.RREP, id, currentTime, LQI, p.appId, donatedResources);
-                            }
+                            handleRREQ(p);
                             break;
                         case RJOIN:
                             handleRJOIN(p);
                             break;
                         case RREP:
-                            // Currently RSU handles RREP's
+                            // Currently only RSU handles RREP's
                             break;
                         case RACK:
-                            existingVCs.put(p.appId, p.cloud);
+                            handleRACK(p);
+                            break;
+                        case RTEAR:
+                            existingVCs.remove(p.appId);
+                            break;
+                        case PSTART:
+                            handlePSTART(p);
+                            break;
+                        case PDONE:
+                            handlePDONE(p);
+                            break;
+                        default:
+                            System.out.println("Unhandled packet type " + p.type);
                             break;
                     }
                 }

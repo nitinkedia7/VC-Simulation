@@ -98,6 +98,12 @@ public class RoadSideUnit implements Runnable {
                         case RACK:
                             // RSU sends RACK, not process it
                             break;
+                        case RTEAR:
+                            clouds.remove(p.appId);
+                            break;
+                        default:
+                            // PSTART, PDONE are between VC members
+                            break;
                     }
                 }
             }

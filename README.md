@@ -15,8 +15,14 @@ Graphs 1 and 2 are similar. Current approach is to run simulation and print even
 
 0. Ensure completeness of logs.
 Need to fix bugs.
+
 1. Distribution of task and Teardown of VC.
-RREQ's additionally have a quota to complete. Currently, each RREP indicates 1 unit of service. After the VC is elected it needs to send message to start processing. After that time every member responds that its work is done. VC then sends teardown message.
+RREQ's additionally have a quota to complete DONE.
+Currently, each RREP indicates 1 unit of service DONE.
+After the VC is elected it needs to send message to start processing DONE.
+After some time every member responds that its work is done DONE.
+VC then sends teardown message DONE.
+
 2. Mobility of vehicles  
 Instead of a hard segment approach followed currently for each interval first update the positions for all vehicles. Iterate over the vehicle list in chunks of a segment, simulate one time unit for each chunk.
 
