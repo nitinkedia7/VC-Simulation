@@ -1,5 +1,3 @@
-package src;
-
 import java.util.*;
 
 public class Cloud {
@@ -58,11 +56,11 @@ public class Cloud {
         return (neededResources == 0); // returns True is satisfied
     }
 
-    public void printStats() {
-        System.out.print("Cloud generated with members ");
+    public void printStats(Boolean isForming) {
+        System.out.print("Cloud with members ");
         for (int i = 0; i < members.size(); i++) {
             System.out.print(members.get(i).vehicleId + " ");
         }        
-        System.out.println("for app id " + appId);
+        System.out.println("for app id " + appId + (isForming ? " formed" : " deleted")) ;
     }
 }

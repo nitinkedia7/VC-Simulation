@@ -1,5 +1,3 @@
-package src;
-
 import java.util.*;
 import java.util.concurrent.Phaser;
 
@@ -61,7 +59,7 @@ public class RoadSideUnit implements Runnable {
         if (clouds.get(appId).metResourceQuota()) {
             writePending = true;
             pendingPacket = new Packet(Config.PACKET_TYPE.RACK, id, currentTime, appId, clouds.get(appId));
-            clouds.get(appId).printStats();
+            clouds.get(appId).printStats(true);
         }
     }
 
@@ -79,12 +77,9 @@ public class RoadSideUnit implements Runnable {
                 // 1. Read pending requests
                 messageQueue = mediumRef.read(id);
                 while (messageQueue != null && !messageQueue.isEmpty()) {
-                    System.out.println(messageQueue.size());
                     Packet p = messageQueue.poll();
-                    if (p == null) {
-                        System.out.println("read packet is NULL");
-                    }
-                    System.out.println("Packet " + ": RSU    " + id + " read " + p.type + " from " + p.senderId + " at " + p.sentTime);
+                    assert p != null : "Read packet is NULL";                                       
+                    p.printRead(id);
                     switch (p.type) {
                         case RREQ:
                             handleRREQ(p);

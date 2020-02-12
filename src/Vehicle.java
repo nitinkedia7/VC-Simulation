@@ -1,5 +1,3 @@
-package src;
-
 import java.util.*;
 import java.util.concurrent.Phaser;
 import java.util.concurrent.ThreadLocalRandom;
@@ -81,7 +79,7 @@ public class Vehicle implements Runnable {
         if (isCloudLeader(cloud)) {
             cloud.workingMemberCount = cloud.members.size();
             writePending = true;
-            pendingPacket = new Packet(Config.PACKET_TYPE.PSTART, id, currentTime, cloud.appId);
+            pendingPacket = new Packet(Config.PACKET_TYPE.PSTART, id, currentTime, cloud.appId, cloud);
         }
     }
     
@@ -101,6 +99,8 @@ public class Vehicle implements Runnable {
         if (cloud.workingMemberCount == 0) {
             writePending = true;
             pendingPacket = new Packet(Config.PACKET_TYPE.RTEAR, id, currentTime, donePacket.appId);
+            cloud.printStats(false);
+            existingVCs.remove(donePacket.appId);
         }
     }
 
@@ -136,7 +136,7 @@ public class Vehicle implements Runnable {
             }   
             else {
                 // 1. (Randomly) Request for an application
-                int hasRequest = ThreadLocalRandom.current().nextInt(5);
+                int hasRequest = ThreadLocalRandom.current().nextInt(Config.INV_RREQ_PROB);
                 if (hasRequest == 1) {
                     int appType = ThreadLocalRandom.current().nextInt(Config.APPLICATION_TYPE_COUNT);
                     if (existingVCs.getOrDefault(appType, null) != null) { // RJOIN
@@ -153,8 +153,8 @@ public class Vehicle implements Runnable {
                 messageQueue = mediumRef.read(id);
                 while (!writePending && messageQueue != null && !messageQueue.isEmpty()) {
                     Packet p = messageQueue.poll();
-                    assert p != null : "Read packet is NULL";                    
-                    System.out.println("Packet " + ": Vehicle " + id + " read " + p.type + " from " + p.senderId + " at " + p.sentTime);
+                    assert p != null : "Read packet is NULL";      
+                    p.printRead(id);              
                     
                     switch (p.type) {
                         case RREQ:

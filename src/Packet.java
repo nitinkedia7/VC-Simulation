@@ -1,5 +1,3 @@
-package src;
-
 public class Packet {
     Config.PACKET_TYPE type;
     int senderId;
@@ -37,10 +35,15 @@ public class Packet {
         this.LQI = LQI;
     }
 
-    // Constructor for RACK
+    // Constructor for RACK, PSTART
     public Packet(Config.PACKET_TYPE type, int senderId, int sentTime, int appId, Cloud cloud) {
         this(type, senderId, sentTime, appId);
-        assert (type == Config.PACKET_TYPE.RACK) : "Packet constructor type mismatch";
+        assert (type == Config.PACKET_TYPE.RACK || type == Config.PACKET_TYPE.PSTART) : "Packet constructor type mismatch";
         this.cloud = cloud;
+    }
+
+    public void printRead(int readerId) {
+        System.out.println("Packet : " + readerId + " read " + type + " from " + senderId + " at " + sentTime);
+        return;
     }
 }

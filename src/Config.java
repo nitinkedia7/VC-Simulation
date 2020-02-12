@@ -1,5 +1,3 @@
-package src;
-
 public class Config {
     static int ROAD_LENGTH = 40000;
     static int SEGMENT_LENGTH = 600;
@@ -8,13 +6,7 @@ public class Config {
     static int RSU_RANGE = 300;
     static int VEHICLE_RANGE = 300;
     static enum PACKET_TYPE {
-        RREQ,
-        RREP,
-        RJOIN,
-        RACK,
-        RTEAR,
-        PSTART,
-        PDONE;
+        RREQ, RREP, RJOIN, RACK, RTEAR, PSTART, PDONE;
     }
     static boolean useFair = true;
     static int APPLICATION_TYPE_COUNT = 5;
@@ -22,4 +14,5 @@ public class Config {
     static int STOP_TIME = 18000;
     static int MAX_RESOURCE_QUOTA = 100;
     static int PROCESSING_SPEED = 1;
+    static int INV_RREQ_PROB = 10;
 }
