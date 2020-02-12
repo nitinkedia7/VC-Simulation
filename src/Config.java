@@ -3,11 +3,9 @@ public class Config {
     static double ROAD_START = 0.0;
     static double VEHICLE_SPEED_MIN = 8.33; // m/s
     static double VEHICLE_SPEED_MAX = 25.0; // m/s
-    static int SEGMENT_LENGTH = 600;
-    static int SEGMENT_COUNT = 1;
+    static double SEGMENT_LENGTH = 600;
     static int VEHICLE_COUNT = 3;
-    static int RSU_RANGE = 300;
-    static int VEHICLE_RANGE = 300;
+    static int TRANSMISSION_RANGE = 300;
     static enum PACKET_TYPE {
         RREQ, RREP, RJOIN, RACK, RTEAR, PSTART, PDONE;
     }

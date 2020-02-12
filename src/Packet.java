@@ -3,7 +3,7 @@ public class Packet {
     int senderId;
     int sentTime;   
     int appId;
-    int LQI;
+    double velocity;
     Cloud cloud;       
     int reqResources;
     int donatedResources;
@@ -14,25 +14,24 @@ public class Packet {
         this.sentTime = sentTime;
         this.appId = appId;
         System.out.println("Packet " + ": Sender " + senderId + " generated " + type + " at " + sentTime);
-
     }
 
     // Constructor for RREQ
-    public Packet(Config.PACKET_TYPE type, int senderId, int sentTime, int LQI, int appId, int reqResources, int donatedResources) {
+    public Packet(Config.PACKET_TYPE type, int senderId, int sentTime, double velocity, int appId, int reqResources, int donatedResources) {
         this(type, senderId, sentTime, appId);
         assert (type == Config.PACKET_TYPE.RREQ) : "Packet constructor type mismatch";
         this.reqResources = reqResources;
         this.donatedResources = donatedResources;
-        this.LQI = LQI;
+        this.velocity = velocity;
     }    
 
 
     // Constructor for RREP, RJOIN
-    public Packet(Config.PACKET_TYPE type, int senderId, int sentTime, int LQI, int appId, int donatedResources) {
+    public Packet(Config.PACKET_TYPE type, int senderId, int sentTime, double velocity, int appId, int donatedResources) {
         this(type, senderId, sentTime, appId);
         assert (type == Config.PACKET_TYPE.RREP || type == Config.PACKET_TYPE.RJOIN) : "Packet constructor type mismatch";
         this.donatedResources = donatedResources;
-        this.LQI = LQI;
+        this.velocity = velocity;
     }
 
     // Constructor for RACK, PSTART

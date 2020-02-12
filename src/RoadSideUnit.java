@@ -11,8 +11,7 @@ import java.util.concurrent.Phaser;
 
 public class RoadSideUnit implements Runnable {
     int id;
-    int posX;
-    int LQI;
+    double position;
     Phaser timeSync;
     int currentTime;
     int stopTime;
@@ -21,16 +20,13 @@ public class RoadSideUnit implements Runnable {
     Queue<Packet> messageQueue;
     Map<Integer, Cloud> clouds;
     Medium mediumRef;
-    Segment segmentRef;
 
-    public RoadSideUnit(int id, int posX, Phaser timeSync, Medium mediumRef, Segment segmentRef, int stopTime) {
+    public RoadSideUnit(int id, double position, Phaser timeSync, Medium mediumRef, int stopTime) {
         this.id = id;
-        this.posX = posX;
-        this.LQI = 0;
+        this.position = position;
         this.currentTime = 0;
         this.stopTime = stopTime;
         this.mediumRef = mediumRef;
-        this.segmentRef = segmentRef;
         this.writePending = false;
         clouds = new HashMap<Integer, Cloud>();
         this.timeSync = timeSync;

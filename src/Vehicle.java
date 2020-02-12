@@ -12,7 +12,6 @@ public class Vehicle implements Runnable {
     int stopTime;
     Phaser timeSync;
     Medium mediumRef;
-    Segment segmentRef;
     Map<Integer, Cloud> existingVCs;
     boolean writePending;
     Packet pendingPacket;
@@ -35,16 +34,16 @@ public class Vehicle implements Runnable {
     int bookedTillTime;
     Queue<ProcessBlock> processQueue;
 
-    public Vehicle(int id, double position, double speed, int direction, Phaser timeSync, Medium mediumRef, Segment segmentRef, int stopTime) {
+    public Vehicle(int id, Phaser timeSync, Medium mediumRef, int stopTime) {
         this.id = id;
-        this.position = position;
-        this.speed = speed;
-        this.direction = direction;
+        Random random = new Random();
+        this.position = random.nextDouble() * Config.ROAD_END;
+        this.speed = Config.VEHICLE_SPEED_MIN + random.nextDouble() * (Config.VEHICLE_SPEED_MAX - Config.VEHICLE_SPEED_MIN);
+        this.direction = random.nextInt(2);
         this.lastUpdated = 0;
         this.currentTime = 0;
         this.stopTime = stopTime;
         this.mediumRef = mediumRef;
-        this.segmentRef = segmentRef;
         this.writePending = false;
         existingVCs = new HashMap<Integer, Cloud>();
         this.availableResources = Config.MAX_RESOURCE_QUOTA;
@@ -79,7 +78,7 @@ public class Vehicle implements Runnable {
         if (donatedResources > 0) {
             availableResources -= donatedResources;
             writePending = true;
-            pendingPacket = new Packet(Config.PACKET_TYPE.RREP, id, currentTime, LQI, p.appId, donatedResources);
+            pendingPacket = new Packet(Config.PACKET_TYPE.RREP, id, currentTime, direction * speed, p.appId, donatedResources);
         }
     }
 
@@ -129,6 +128,7 @@ public class Vehicle implements Runnable {
 
     public void run() {
         while (currentTime <= stopTime) {
+            updatePosition();
             // System.out.println("Vehicle " + id + " starting interval " + currentTime);
             if (!processQueue.isEmpty()) {
                 ProcessBlock nextBlock = processQueue.peek();
@@ -152,12 +152,12 @@ public class Vehicle implements Runnable {
                     int appType = ThreadLocalRandom.current().nextInt(Config.APPLICATION_TYPE_COUNT);
                     if (existingVCs.getOrDefault(appType, null) != null) { // RJOIN
                         writePending = true;
-                        pendingPacket = new Packet(Config.PACKET_TYPE.RJOIN, id, currentTime, LQI, appType, getDonatedResources());
+                        pendingPacket = new Packet(Config.PACKET_TYPE.RJOIN, id, currentTime, speed * direction, appType, getDonatedResources());
                         handleRJOIN(pendingPacket);
                     } 
                     else { // RREQ
                         writePending = true;
-                        pendingPacket = new Packet(Config.PACKET_TYPE.RREQ, id, currentTime, LQI, appType, Config.MAX_RESOURCE_QUOTA , getDonatedResources());
+                        pendingPacket = new Packet(Config.PACKET_TYPE.RREQ, id, currentTime, speed * direction, appType, Config.MAX_RESOURCE_QUOTA , getDonatedResources());
                     }
                 }
                 // 2. Read medium queue
