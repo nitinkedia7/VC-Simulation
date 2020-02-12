@@ -1,5 +1,8 @@
 public class Config {
-    static int ROAD_LENGTH = 40000;
+    static double ROAD_END = 40000.0; // m
+    static double ROAD_START = 0.0;
+    static double VEHICLE_SPEED_MIN = 8.33; // m/s
+    static double VEHICLE_SPEED_MAX = 25.0; // m/s
     static int SEGMENT_LENGTH = 600;
     static int SEGMENT_COUNT = 1;
     static int VEHICLE_COUNT = 3;

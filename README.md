@@ -14,7 +14,7 @@ Number of leader changes in a particular VC vs mobility of the vehicles.
 Graphs 1 and 2 are similar. Current approach is to run simulation and print event logs with sufficient information so that the metrics can be computed. Pending items:  
 
 0. Ensure completeness of logs.
-Need to fix bugs.
+Insufficient donations resulting in no VC formation. TODO
 
 1. Distribution of task and Teardown of VC.
 RREQ's additionally have a quota to complete DONE.
@@ -24,7 +24,16 @@ After some time every member responds that its work is done DONE.
 VC then sends teardown message DONE.
 
 2. Mobility of vehicles  
-Instead of a hard segment approach followed currently for each interval first update the positions for all vehicles. Iterate over the vehicle list in chunks of a segment, simulate one time unit for each chunk.
+Instead of a hard segment approach followed currently.
+For each interval first update the positions for all vehicles. TODO
+Iterate over the vehicle list in chunks of a segment TODO 
+Simulate one time unit for each chunk. TODO
+
+1 control channel.
+4 service channel
+each set of 4 consecutive channels use (i%4)th service channel
+Thus, segments can transfer without interfering with each other.
+segments are logical, need to remove segment class
 
 # Doubts
 [2] For Graph 3 will constant vehicle speed will work or the average speed should be varied.

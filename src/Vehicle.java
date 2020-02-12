@@ -4,9 +4,10 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public class Vehicle implements Runnable {
     int id;
-    int posX; // in m
-    int speedX; // in m/s
-    int LQI;
+    double position;
+    double speed;
+    int direction;
+    int lastUpdated;
     int currentTime;
     int stopTime;
     Phaser timeSync;
@@ -34,13 +35,14 @@ public class Vehicle implements Runnable {
     int bookedTillTime;
     Queue<ProcessBlock> processQueue;
 
-    public Vehicle(int id, int posX, int speedX, Phaser timeSync, Medium mediumRef, Segment segmentRef, int stopTime) {
+    public Vehicle(int id, double position, double speed, int direction, Phaser timeSync, Medium mediumRef, Segment segmentRef, int stopTime) {
         this.id = id;
+        this.position = position;
+        this.speed = speed;
+        this.direction = direction;
+        this.lastUpdated = 0;
         this.currentTime = 0;
         this.stopTime = stopTime;
-        this.posX = posX;
-        this.speedX = speedX;
-        this.LQI = 0;
         this.mediumRef = mediumRef;
         this.segmentRef = segmentRef;
         this.writePending = false;
@@ -54,13 +56,22 @@ public class Vehicle implements Runnable {
         System.out.println("Vehicle " + id + " initialised.");
     } 
 
-    /* Returns false if segment has changed */ 
-    public boolean updatePosition() {
-        posX += speedX;
-        int segmentStart = Config.SEGMENT_LENGTH * segmentRef.id;
-        int segmentEnd = Config.SEGMENT_LENGTH * (segmentRef.id + 1);
-        if (posX < segmentStart || posX > segmentEnd) return false;
-        return true;
+    public void updatePosition() {
+        position += direction * speed * (currentTime- lastUpdated);
+        if (position > Config.ROAD_END) position = Config.ROAD_START;
+        else if (position < Config.ROAD_START) position = Config.ROAD_END;
+        
+        Random random = new Random();
+        double speedChange = random.nextDouble() * 10;
+        Boolean accelerate = random.nextBoolean();
+        if (accelerate && (speed + speedChange) < Config.VEHICLE_SPEED_MAX) {
+            speed += speedChange;
+        }
+        if (!accelerate && (speed - speedChange) > Config.VEHICLE_SPEED_MIN) {
+            speed -= speedChange;
+        }
+        this.lastUpdated = currentTime;  
+        return;
     }
 
     public void handleRREQ(Packet p) {
