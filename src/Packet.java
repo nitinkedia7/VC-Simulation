@@ -4,6 +4,7 @@ public class Packet {
     int sentTime;   
     int appId;
     double velocity;
+    double position;
     Cloud cloud;       
     int reqResources;
     int donatedResources;
@@ -39,6 +40,10 @@ public class Packet {
         this(type, senderId, sentTime, appId);
         assert (type == Config.PACKET_TYPE.RACK || type == Config.PACKET_TYPE.PSTART) : "Packet constructor type mismatch";
         this.cloud = cloud;
+    }
+
+    public void setTransmitPosition(double position) {
+        this.position = position;
     }
 
     public void printRead(int readerId) {

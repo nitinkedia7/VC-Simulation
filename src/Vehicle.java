@@ -12,10 +12,11 @@ public class Vehicle implements Runnable {
     int stopTime;
     Phaser timeSync;
     Medium mediumRef;
-    Map<Integer, Cloud> existingVCs;
-    boolean writePending;
-    Packet pendingPacket;
-    Queue<Packet> messageQueue;
+    Map<Integer, Cloud> clouds;
+    int channelId;
+    Queue<Packet> transmitQueue;
+    Queue<Packet> receiveQueue;
+    int readTillIndex;
     int availableResources;
     
     class ProcessBlock {
@@ -44,8 +45,11 @@ public class Vehicle implements Runnable {
         this.currentTime = 0;
         this.stopTime = stopTime;
         this.mediumRef = mediumRef;
-        this.writePending = false;
-        existingVCs = new HashMap<Integer, Cloud>();
+        clouds = new HashMap<Integer, Cloud>();
+        this.channelId = 0;
+        this.transmitQueue = new LinkedList<Packet>();
+        this.receiveQueue = new LinkedList<Packet>();
+        this.readTillIndex = 0;
         this.availableResources = Config.MAX_RESOURCE_QUOTA;
         this.bookedTillTime = 0;
         processQueue = new LinkedList<ProcessBlock>();
@@ -77,19 +81,17 @@ public class Vehicle implements Runnable {
         int donatedResources = getDonatedResources();
         if (donatedResources > 0) {
             availableResources -= donatedResources;
-            writePending = true;
-            pendingPacket = new Packet(Config.PACKET_TYPE.RREP, id, currentTime, direction * speed, p.appId, donatedResources);
+            transmitQueue.add(new Packet(Config.PACKET_TYPE.RREP, id, currentTime, direction * speed, p.appId, donatedResources));
         }
     }
 
     public void handleRACK(Packet ackPacket) {
         // Save this cloud
         Cloud cloud = ackPacket.cloud;
-        existingVCs.put(ackPacket.appId, cloud);
+        clouds.put(ackPacket.appId, cloud);
         if (isCloudLeader(cloud)) {
             cloud.workingMemberCount = cloud.members.size();
-            writePending = true;
-            pendingPacket = new Packet(Config.PACKET_TYPE.PSTART, id, currentTime, cloud.appId, cloud);
+            transmitQueue.add(new Packet(Config.PACKET_TYPE.PSTART, id, currentTime, cloud.appId, cloud));
         }
     }
     
@@ -103,14 +105,13 @@ public class Vehicle implements Runnable {
     }
 
     public void handlePDONE(Packet donePacket) {
-        Cloud cloud = existingVCs.get(donePacket.appId);
+        Cloud cloud = clouds.get(donePacket.appId);
         if (!isCloudLeader(cloud)) return;
         cloud.markAsDone(donePacket.senderId);
         if (cloud.workingMemberCount == 0) {
-            writePending = true;
-            pendingPacket = new Packet(Config.PACKET_TYPE.RTEAR, id, currentTime, donePacket.appId);
+            transmitQueue.add(new Packet(Config.PACKET_TYPE.RTEAR, id, currentTime, donePacket.appId));
             cloud.printStats(false);
-            existingVCs.remove(donePacket.appId);
+            clouds.remove(donePacket.appId);
         }
     }
 
@@ -128,71 +129,74 @@ public class Vehicle implements Runnable {
 
     public void run() {
         while (currentTime <= stopTime) {
-            updatePosition();
             // System.out.println("Vehicle " + id + " starting interval " + currentTime);
-            if (!processQueue.isEmpty()) {
+            updatePosition();
+
+            // Attempt to transmit packets in transmitQueue
+            Channel targetChannel = mediumRef.channels[channelId];
+            if (targetChannel.isFree(id, position)) {
+                while (!transmitQueue.isEmpty()) {
+                    Packet packet = transmitQueue.poll();
+                    targetChannel.transmitPacket(packet);
+                }        
+                targetChannel.stopTransmit(id);
+            }
+            
+            // Put processed work done (if any) to receiveQueue
+            while (!processQueue.isEmpty()) {
                 ProcessBlock nextBlock = processQueue.peek();
                 if (currentTime >= nextBlock.completionTime) {
-                    writePending = true;
-                    pendingPacket = new Packet(Config.PACKET_TYPE.PDONE, id, currentTime, nextBlock.appId);
+                    transmitQueue.add(new Packet(Config.PACKET_TYPE.PDONE, id, currentTime, nextBlock.appId));
                     processQueue.remove();
                 }
             }
-            else if (writePending) {
-                boolean written = mediumRef.write(pendingPacket);
-                if (written) {
-                    writePending = false;
-                    pendingPacket = null;
+             
+            // (Randomly) Request for an application
+            int hasRequest = ThreadLocalRandom.current().nextInt(Config.INV_RREQ_PROB);
+            if (hasRequest == 1) {
+                int appType = ThreadLocalRandom.current().nextInt(Config.APPLICATION_TYPE_COUNT);
+                if (clouds.getOrDefault(appType, null) != null) { // RJOIN
+                    Packet pendingPacket = new Packet(Config.PACKET_TYPE.RJOIN, id, currentTime, speed * direction, appType, getDonatedResources());
+                    transmitQueue.add(pendingPacket);
+                    handleRJOIN(pendingPacket);
+                } 
+                else { // RREQ
+                    transmitQueue.add(new Packet(Config.PACKET_TYPE.RREQ, id, currentTime, speed * direction, appType, Config.MAX_RESOURCE_QUOTA, getDonatedResources()));
                 }
-            }   
-            else {
-                // 1. (Randomly) Request for an application
-                int hasRequest = ThreadLocalRandom.current().nextInt(Config.INV_RREQ_PROB);
-                if (hasRequest == 1) {
-                    int appType = ThreadLocalRandom.current().nextInt(Config.APPLICATION_TYPE_COUNT);
-                    if (existingVCs.getOrDefault(appType, null) != null) { // RJOIN
-                        writePending = true;
-                        pendingPacket = new Packet(Config.PACKET_TYPE.RJOIN, id, currentTime, speed * direction, appType, getDonatedResources());
-                        handleRJOIN(pendingPacket);
-                    } 
-                    else { // RREQ
-                        writePending = true;
-                        pendingPacket = new Packet(Config.PACKET_TYPE.RREQ, id, currentTime, speed * direction, appType, Config.MAX_RESOURCE_QUOTA , getDonatedResources());
-                    }
-                }
-                // 2. Read medium queue
-                messageQueue = mediumRef.read(id);
-                while (!writePending && messageQueue != null && !messageQueue.isEmpty()) {
-                    Packet p = messageQueue.poll();
-                    assert p != null : "Read packet is NULL";      
-                    p.printRead(id);              
-                    
-                    switch (p.type) {
-                        case RREQ:
-                            handleRREQ(p);
-                            break;
-                        case RJOIN:
-                            handleRJOIN(p);
-                            break;
-                        case RREP:
-                            // Currently only RSU handles RREP's
-                            break;
-                        case RACK:
-                            handleRACK(p);
-                            break;
-                        case RTEAR:
-                            existingVCs.remove(p.appId);
-                            break;
-                        case PSTART:
-                            handlePSTART(p);
-                            break;
-                        case PDONE:
-                            handlePDONE(p);
-                            break;
-                        default:
-                            System.out.println("Unhandled packet type " + p.type);
-                            break;
-                    }
+            }
+            // Also get and process receivedPackets
+            int newPacketCount = targetChannel.receivePackets(readTillIndex, position, receiveQueue); 
+            readTillIndex += newPacketCount;
+            while (!receiveQueue.isEmpty()) {
+                Packet p = receiveQueue.poll();
+                assert p != null : "Read packet is NULL";      
+                p.printRead(id);              
+                
+                switch (p.type) {
+                    case RREQ:
+                        handleRREQ(p);
+                        break;
+                    case RJOIN:
+                        handleRJOIN(p);
+                        break;
+                    case RREP:
+                        // Currently only RSU handles RREP's
+                        break;
+                    case RACK:
+                        handleRACK(p);
+                        break;
+                    case RTEAR:
+                        clouds.remove(p.appId);
+                        break;
+                    case PSTART:
+                        handlePSTART(p);
+                        break;
+                    case PDONE:
+                        handlePDONE(p);
+                        break;
+                    default:
+                        System.out.println("Unhandled packet type " + p.type);
+                        break;
                 }
             }
             timeSync.arriveAndAwaitAdvance();
