@@ -52,19 +52,21 @@ public class Channel {
         transmitterPositionsLock.unlock();
     }
 
-    public void transmitPacket(Packet packet) {
+    public void transmitPacket(Packet packet, int currentTime, double currentPosition) {
         packetQueueLock.writeLock().lock();
         packetQueue.add(packet);
+        packet.recordTransmission(currentTime, currentPosition);
         packetQueueLock.writeLock().unlock();
     }
 
-    public int receivePackets(int readTillIndex, double position, Queue<Packet> receiveQueue) {
+    public int receivePackets(int readTillIndex, int currentTime, double position, Queue<Packet> receiveQueue) {
         packetQueueLock.readLock().lock();
         int newPacketCount = packetQueue.size() - readTillIndex;
         while (readTillIndex < packetQueue.size()) {
             Packet packet = packetQueue.get(readTillIndex);
             if (Math.abs(position - packet.position) <= Config.TRANSMISSION_RANGE) {
                 receiveQueue.add(packet);
+                packet.recordReception(currentTime);
             }
             readTillIndex++;
         }

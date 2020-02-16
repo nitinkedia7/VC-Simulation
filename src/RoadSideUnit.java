@@ -12,13 +12,15 @@ public class RoadSideUnit implements Runnable {
     Queue<Packet> receiveQueue;
     int readTillIndex;
     Map<Integer, Cloud> clouds;
+    Simulator simulatorRef;
     Medium mediumRef;
 
-    public RoadSideUnit(int id, double position, Phaser timeSync, Medium mediumRef, int stopTime) {
+    public RoadSideUnit(int id, double position, Phaser timeSync, Simulator simulatorRef, Medium mediumRef, int stopTime) {
         this.id = id;
         this.position = position;
         this.currentTime = 0;
         this.stopTime = stopTime;
+        this.simulatorRef = simulatorRef;
         this.mediumRef = mediumRef;
         this.channelId = 0;
         this.transmitQueue = new LinkedList<Packet>();
@@ -49,7 +51,7 @@ public class RoadSideUnit implements Runnable {
         assert clouds.containsKey(appId) : "No cloud present for app " + appId;
         clouds.get(appId).addMember(donorPacket);
         if (clouds.get(appId).metResourceQuota()) {
-            transmitQueue.add(new Packet(Config.PACKET_TYPE.RACK, id, currentTime, appId, clouds.get(appId)));
+            transmitQueue.add(new Packet(simulatorRef, Config.PACKET_TYPE.RACK, id, currentTime, appId, clouds.get(appId)));
             clouds.get(appId).printStats(true);
         }
     }
@@ -63,13 +65,13 @@ public class RoadSideUnit implements Runnable {
             if (targetChannel.isFree(id, position)) {
                 while (!transmitQueue.isEmpty()) {
                     Packet packet = transmitQueue.poll();
-                    targetChannel.transmitPacket(packet);
+                    targetChannel.transmitPacket(packet, currentTime, position);
                 }        
                 targetChannel.stopTransmit(id);
             }
 
             // Also get and process receivedPackets
-            int newPacketCount = targetChannel.receivePackets(readTillIndex, position, receiveQueue); 
+            int newPacketCount = targetChannel.receivePackets(readTillIndex, currentTime, position, receiveQueue); 
             readTillIndex += newPacketCount;
             while (!receiveQueue.isEmpty()) {
                 Packet p = receiveQueue.poll();
