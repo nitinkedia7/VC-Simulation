@@ -5,6 +5,9 @@ public class Cloud {
     int requestorId;
     int neededResources;
     int workingMemberCount;
+    int initialRequestTime;
+    int resourceQuotaMetTime;
+    Simulator simulatorRef;
 
     class Member {
         int vehicleId;
@@ -19,10 +22,13 @@ public class Cloud {
     }    
     List<Member> members;
 
-    public Cloud(Packet packet) {
+    public Cloud(Simulator simulatorRef, Packet packet) {
         this.appId = packet.appId;
         this.requestorId = packet.senderId;
         this.neededResources = packet.reqResources;
+        this.initialRequestTime = packet.genTime;
+        this.resourceQuotaMetTime = 0;
+        this.simulatorRef = simulatorRef;
         this.members = new ArrayList<Member>(); 
         addMember(packet);
     }
@@ -54,6 +60,12 @@ public class Cloud {
 
     public Boolean metResourceQuota() {
         return (neededResources == 0); // returns True is satisfied
+    }
+
+    public void recordCloudFormed(int formedTime) {
+        this.resourceQuotaMetTime = formedTime;
+        this.simulatorRef.recordCloudFormed(formedTime - this.initialRequestTime);
+        return;
     }
 
     public void printStats(Boolean isForming) {

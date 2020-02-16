@@ -41,7 +41,7 @@ public class RoadSideUnit implements Runnable {
         if (clouds.containsKey(appId)) {
             return;
         }
-        clouds.put(appId, new Cloud(reqPacket));
+        clouds.put(appId, new Cloud(simulatorRef, reqPacket));
         // Also add the requestor as a donor
         handleRREP(reqPacket);
     }
@@ -50,9 +50,10 @@ public class RoadSideUnit implements Runnable {
         int appId = donorPacket.appId;
         assert clouds.containsKey(appId) : "No cloud present for app " + appId;
         clouds.get(appId).addMember(donorPacket);
-        if (clouds.get(appId).metResourceQuota()) {
-            transmitQueue.add(new Packet(simulatorRef, Config.PACKET_TYPE.RACK, id, currentTime, appId, clouds.get(appId)));
+        if (clouds.get(appId).metResourceQuota()) {            
+            clouds.get(appId).recordCloudFormed(currentTime);
             clouds.get(appId).printStats(true);
+            transmitQueue.add(new Packet(simulatorRef, Config.PACKET_TYPE.RACK, id, currentTime, appId, clouds.get(appId)));
         }
     }
 

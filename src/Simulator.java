@@ -36,6 +36,8 @@ public class Simulator implements Runnable {
         }
     }
     Map<Config.PACKET_TYPE, PacketStat> packetStats;
+    int totalCloudsFormed;
+    int totalCloudsFormationTime;
 
     public Simulator() {
         currentTime = 0;
@@ -49,6 +51,8 @@ public class Simulator implements Runnable {
             packetStats.put(type, new PacketStat(type));
 
         }
+        totalCloudsFormed = 0;
+        totalCloudsFormationTime = 0;
 
         // Spawn vehicles at random positions
         vehicles  = new ArrayList<Vehicle>();
@@ -84,6 +88,11 @@ public class Simulator implements Runnable {
         packetStats.get(type).totalReceiveTime += receiveTime;
     }
 
+    public synchronized void recordCloudFormed(int formationTime) {
+        totalCloudsFormed++;
+        totalCloudsFormationTime += formationTime;
+    }
+
     public void printStatistics() {
         int totalGeneratedCount = 0;
         int totalTransmittedCount = 0;
@@ -103,8 +112,14 @@ public class Simulator implements Runnable {
         System.out.println("Total packets generated = " + totalGeneratedCount);
         System.out.println("Total packets transmitted = " + totalTransmittedCount);
         System.out.println("Total packets received = " + totalReceivedCount);
-        System.out.println("Average trasmit time = " + ((double) totalTransmitTime)/totalTransmittedCount);
-        System.out.println("Average receive time = " + ((double) totalReceiveTime)/totalReceivedCount);
+        System.out.println("Average trasmit time = " + ((double) totalTransmitTime) / totalTransmittedCount);
+        System.out.println("Average receive time = " + ((double) totalReceiveTime) / totalReceivedCount);
+    
+        System.out.println("Average cluster overhead = " + 
+            totalTransmittedCount / (packetStats.get(Config.PACKET_TYPE.RREQ).transmittedCount + packetStats.get(Config.PACKET_TYPE.RJOIN).transmittedCount)   
+        );
+
+        System.out.println("Average cloud formation time = " + ((double) totalCloudsFormationTime) / totalCloudsFormed);
     }
 
     public void run() {
