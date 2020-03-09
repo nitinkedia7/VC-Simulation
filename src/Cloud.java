@@ -8,6 +8,7 @@ public class Cloud {
     int initialRequestTime;
     int resourceQuotaMetTime;
     Simulator simulatorRef;
+    Queue<Packet> pendingRJOINs;
 
     class Member {
         int vehicleId;
@@ -29,6 +30,7 @@ public class Cloud {
         this.initialRequestTime = packet.genTime;
         this.resourceQuotaMetTime = 0;
         this.simulatorRef = simulatorRef;
+        this.pendingRJOINs = new LinkedList<>();
         this.members = new ArrayList<Member>(); 
         addMember(packet);
     }
@@ -36,7 +38,12 @@ public class Cloud {
     public void addMember(Packet packet) {
         int acceptedResources = Math.min(packet.donatedResources, neededResources);
         neededResources -= acceptedResources;
-        this.members.add(new Member(packet.senderId, acceptedResources));
+        for (Member member : members) {
+            if (member.vehicleId == packet.senderId) {
+                return;
+            }
+        }
+        members.add(new Member(packet.senderId, acceptedResources));
     }
 
     public int getDonatedAmount(int vehicleId) {
@@ -53,6 +60,7 @@ public class Cloud {
             if (member.vehicleId == vehicleId) {
                 member.completed = true;
                 workingMemberCount -= 1;
+                return;
             }
         }
         System.out.println(vehicleId + " is not a member of this cloud " + appId);
@@ -68,11 +76,27 @@ public class Cloud {
         return;
     }
 
+    public void addRJOINPacket(Packet packet) {
+        pendingRJOINs.add(packet);
+    }
+
+    public Boolean processPendingRJOIN() {
+        if (pendingRJOINs.isEmpty()) return false;
+        Packet packet = pendingRJOINs.poll();
+        this.requestorId = packet.senderId;
+        this.neededResources = packet.reqResources;
+        this.initialRequestTime = packet.genTime;
+        this.resourceQuotaMetTime = 0;
+        addMember(packet);
+        return true;
+    }
+
     public void printStats(Boolean isForming) {
-        System.out.print("Cloud with members ");
+        String message = "Cloud with members ";
         for (int i = 0; i < members.size(); i++) {
-            System.out.print(members.get(i).vehicleId + " ");
+            message += members.get(i).vehicleId + " ";
         }        
-        System.out.println("for app id " + appId + (isForming ? " formed" : " deleted")) ;
+        message += ("for app id " + appId + (isForming ? " formed" : " deleted"));
+        System.out.println(message);
     }
 }

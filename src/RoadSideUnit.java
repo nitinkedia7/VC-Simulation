@@ -1,5 +1,6 @@
 import java.util.*;
 import java.util.concurrent.Phaser;
+import java.util.concurrent.ThreadLocalRandom;
 
 public class RoadSideUnit implements Runnable {
     int id;
@@ -14,6 +15,8 @@ public class RoadSideUnit implements Runnable {
     Map<Integer, Cloud> clouds;
     Simulator simulatorRef;
     Medium mediumRef;
+    int backoffTime;
+    int contentionWindowSize;
 
     public RoadSideUnit(int id, double position, Phaser timeSync, Simulator simulatorRef, Medium mediumRef, int stopTime) {
         this.id = id;
@@ -29,11 +32,23 @@ public class RoadSideUnit implements Runnable {
         this.clouds = new HashMap<Integer, Cloud>();
         this.timeSync = timeSync;
         timeSync.register();
+        this.backoffTime = 0;
+        this.contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
         System.out.println("RSU     " + id + " initialised.");
     }
 
-    public void handleRJOIN(Packet newPacket) {
-       // TODO
+    public void handleRJOIN(Packet joinPacket) {
+        Cloud cloud = clouds.get(joinPacket.appId);
+        if (isCloudLeader(cloud)) {
+            cloud.addRJOINPacket(joinPacket);
+        }
+        else {
+            // do nothing, cloud leader will redistribute the work
+        }
+    }
+
+    public Boolean isCloudLeader(Cloud cloud) {
+        return cloud != null && cloud.requestorId == id;  
     }
 
     public void handleRREQ(Packet reqPacket) {
@@ -49,7 +64,7 @@ public class RoadSideUnit implements Runnable {
 
     public void handleRREP(Packet donorPacket) {
         int appId = donorPacket.appId;
-        assert clouds.containsKey(appId) : "No cloud present for app " + appId;
+        assert clouds.containsKey(appId) && clouds.get(appId) != null && donorPacket != null : "No cloud present for app " + appId;
         clouds.get(appId).addMember(donorPacket);
         if (clouds.get(appId).metResourceQuota()) {            
             clouds.get(appId).recordCloudFormed(currentTime);
@@ -70,7 +85,36 @@ public class RoadSideUnit implements Runnable {
                     targetChannel.transmitPacket(packet, currentTime, position);
                 }        
                 targetChannel.stopTransmit(id);
+                // Reset contention window
+                contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
             }
+            // if (backoffTime == 0) {
+            //     if (targetChannel.isFree(id, position)) {
+            //         while (!transmitQueue.isEmpty()) {
+            //             Packet packet = transmitQueue.poll();
+            //             targetChannel.transmitPacket(packet, currentTime, position);
+            //         }        
+            //         targetChannel.stopTransmit(id);
+            //         // Reset contention window
+            //         contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
+            //     }
+            //     else {
+            //         contentionWindowSize *= 2;
+            //         if (contentionWindowSize > Config.CONTENTION_WINDOW_MAX) {
+            //             System.out.println("Vehicle could not transmit in backoff, retrying again");
+            //             backoffTime = 0;
+            //             contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
+            //         }
+            //         else {
+            //             backoffTime = ThreadLocalRandom.current().nextInt(contentionWindowSize) + 1;
+            //         }
+            //     }
+            // }
+            // else {
+            //     if (targetChannel.isFree(id, position)) {
+            //         backoffTime--;
+            //     }
+            // }
 
             // Also get and process receivedPackets
             int newPacketCount = targetChannel.receivePackets(id, readTillIndex, currentTime, position, receiveQueue); 

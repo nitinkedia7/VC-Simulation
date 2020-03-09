@@ -1,3 +1,4 @@
+import java.text.DecimalFormat;
 import java.util.*;
 import java.util.concurrent.Phaser;
 
@@ -8,6 +9,7 @@ public class Simulator implements Runnable {
     ArrayList<RoadSideUnit> roadSideUnits;
     Medium medium;
     Phaser timeSync;
+    DecimalFormat decimalFormat;
 
     public class PacketStat {
         Config.PACKET_TYPE type;
@@ -28,11 +30,12 @@ public class Simulator implements Runnable {
 
         public void printStatistics() {
             System.out.println("-----------------------------------------");
+            System.out.println("Packet type " + type);
             System.out.println("Total packets generated = " + generatedCount);
             System.out.println("Total packets transmitted = " + transmittedCount);
             System.out.println("Total packets received = " + receivedCount);
-            System.out.println("Average trasmit time = " + ((double) totalTransmitTime)/transmittedCount);
-            System.out.println("Average receive time = " + ((double) totalReceiveTime)/receivedCount);
+            System.out.println("Average transmit time in ms = " + decimalFormat.format(((double) totalTransmitTime)/transmittedCount));
+            System.out.println("Average receive time in ms = " + decimalFormat.format(((double) totalReceiveTime)/receivedCount));
         }
     }
     Map<Config.PACKET_TYPE, PacketStat> packetStats;
@@ -45,6 +48,8 @@ public class Simulator implements Runnable {
         timeSync = new Phaser();
         timeSync.register();
         medium = new Medium();
+        decimalFormat = new DecimalFormat();
+        decimalFormat.setMaximumFractionDigits(2);
 
         packetStats = new HashMap<Config.PACKET_TYPE, PacketStat>();
         for (Config.PACKET_TYPE type : Config.PACKET_TYPE.values()) {
@@ -109,17 +114,18 @@ public class Simulator implements Runnable {
             totalReceiveTime += packetStats.get(type).totalReceiveTime;
         }
         System.out.println("-----------------------------------------");
+        System.out.println("Total statistics");
         System.out.println("Total packets generated = " + totalGeneratedCount);
         System.out.println("Total packets transmitted = " + totalTransmittedCount);
         System.out.println("Total packets received = " + totalReceivedCount);
-        System.out.println("Average trasmit time = " + ((double) totalTransmitTime) / totalTransmittedCount);
-        System.out.println("Average receive time = " + ((double) totalReceiveTime) / totalReceivedCount);
+        System.out.println("Average transmit time in ms = " + decimalFormat.format(((double) totalTransmitTime) / totalTransmittedCount));
+        System.out.println("Average receive time in ms = " + decimalFormat.format(((double) totalReceiveTime) / totalReceivedCount));
     
         System.out.println("Average cluster overhead = " + 
             totalTransmittedCount / (packetStats.get(Config.PACKET_TYPE.RREQ).transmittedCount + packetStats.get(Config.PACKET_TYPE.RJOIN).transmittedCount)   
         );
 
-        System.out.println("Average cloud formation time = " + ((double) totalCloudsFormationTime) / totalCloudsFormed);
+        System.out.println("Average cloud formation time in ms = " + decimalFormat.format(((double) totalCloudsFormationTime) / totalCloudsFormed));
     }
 
     public void run() {

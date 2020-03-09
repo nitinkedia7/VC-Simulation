@@ -19,6 +19,8 @@ public class Vehicle implements Runnable {
     Queue<Packet> receiveQueue;
     int readTillIndex;
     int availableResources;
+    int backoffTime;
+    int contentionWindowSize;
     
     class ProcessBlock {
         int completionTime;
@@ -55,6 +57,8 @@ public class Vehicle implements Runnable {
         this.availableResources = Config.MAX_RESOURCE_QUOTA;
         this.bookedTillTime = 0;
         processQueue = new LinkedList<ProcessBlock>();
+        this.backoffTime = 0;
+        this.contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
 
         this.timeSync = timeSync;
         timeSync.register();
@@ -62,28 +66,39 @@ public class Vehicle implements Runnable {
     } 
 
     public void updatePosition() {
-        position += direction * speed * (currentTime- lastUpdated);
-        if (position > Config.ROAD_END) position = Config.ROAD_START;
-        else if (position < Config.ROAD_START) position = Config.ROAD_END;
-        
-        Random random = new Random();
-        double speedChange = random.nextDouble() * 10;
-        Boolean accelerate = random.nextBoolean();
-        if (accelerate && (speed + speedChange) < Config.VEHICLE_SPEED_MAX) {
-            speed += speedChange;
-        }
-        if (!accelerate && (speed - speedChange) > Config.VEHICLE_SPEED_MIN) {
-            speed -= speedChange;
-        }
-        this.lastUpdated = currentTime;  
         return;
+        // position += direction * speed * (currentTime- lastUpdated);
+        // if (position > Config.ROAD_END) position = Config.ROAD_START;
+        // else if (position < Config.ROAD_START) position = Config.ROAD_END;
+        
+        // Random random = new Random();
+        // double speedChange = random.nextDouble() * 10;
+        // Boolean accelerate = random.nextBoolean();
+        // if (accelerate && (speed + speedChange) < Config.VEHICLE_SPEED_MAX) {
+        //     speed += speedChange;
+        // }
+        // if (!accelerate && (speed - speedChange) > Config.VEHICLE_SPEED_MIN) {
+        //     speed -= speedChange;
+        // }
+        // this.lastUpdated = currentTime;  
+        // return;
     }
 
     public void handleRREQ(Packet p) {
         int donatedResources = getDonatedResources();
         if (donatedResources > 0) {
-            availableResources -= donatedResources;
+            // availableResources -= donatedResources;
             transmitQueue.add(new Packet(simulatorRef, Config.PACKET_TYPE.RREP, id, currentTime, direction * speed, p.appId, donatedResources));
+        }
+    }
+
+    public void handleRJOIN(Packet joinPacket) {
+        Cloud cloud = clouds.get(joinPacket.appId);
+        if (isCloudLeader(cloud)) {
+            cloud.addRJOINPacket(joinPacket);
+        }
+        else {
+            // do nothing, cloud leader will redistribute the work
         }
     }
 
@@ -93,7 +108,9 @@ public class Vehicle implements Runnable {
         clouds.put(ackPacket.appId, cloud);
         if (isCloudLeader(cloud)) {
             cloud.workingMemberCount = cloud.members.size();
-            transmitQueue.add(new Packet(simulatorRef, Config.PACKET_TYPE.PSTART, id, currentTime, cloud.appId, cloud));
+            Packet pstartPacket = new Packet(simulatorRef, Config.PACKET_TYPE.PSTART, id, currentTime, cloud.appId, cloud);
+            transmitQueue.add(pstartPacket);
+            handlePSTART(pstartPacket);
         }
     }
     
@@ -111,14 +128,18 @@ public class Vehicle implements Runnable {
         if (!isCloudLeader(cloud)) return;
         cloud.markAsDone(donePacket.senderId);
         if (cloud.workingMemberCount == 0) {
-            transmitQueue.add(new Packet(simulatorRef, Config.PACKET_TYPE.RTEAR, id, currentTime, donePacket.appId));
-            cloud.printStats(false);
-            clouds.remove(donePacket.appId);
+            if (cloud.processPendingRJOIN()) {
+                cloud.workingMemberCount = cloud.members.size();
+                Packet pstartPacket = new Packet(simulatorRef, Config.PACKET_TYPE.PSTART, id, currentTime, cloud.appId, cloud);
+                transmitQueue.add(pstartPacket);
+                handlePSTART(pstartPacket);
+            }
+            else {
+                transmitQueue.add(new Packet(simulatorRef, Config.PACKET_TYPE.RTEAR, id, currentTime, donePacket.appId));
+                cloud.printStats(false);
+                clouds.remove(donePacket.appId);
+            }
         }
-    }
-
-    public void handleRJOIN(Packet newPacket) {
-        // TODO
     }
 
     public Boolean isCloudLeader(Cloud cloud) {
@@ -143,7 +164,36 @@ public class Vehicle implements Runnable {
                     targetChannel.transmitPacket(packet, currentTime, position);
                 }        
                 targetChannel.stopTransmit(id);
+                // Reset contention window
+                contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
             }
+            // if (backoffTime == 0) {
+            //     if (targetChannel.isFree(id, position)) {
+            //         while (!transmitQueue.isEmpty()) {
+            //             Packet packet = transmitQueue.poll();
+            //             targetChannel.transmitPacket(packet, currentTime, position);
+            //         }        
+            //         targetChannel.stopTransmit(id);
+            //         // Reset contention window
+            //         contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
+            //     }
+            //     else {
+            //         contentionWindowSize *= 2;
+            //         if (contentionWindowSize > Config.CONTENTION_WINDOW_MAX) {
+            //             System.out.println("Vehicle could not transmit in backoff, retrying again");
+            //             backoffTime = 0;
+            //             contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
+            //         }
+            //         else {
+            //             backoffTime = ThreadLocalRandom.current().nextInt(contentionWindowSize) + 1;
+            //         }
+            //     }
+            // }
+            // else {
+            //     if (targetChannel.isFree(id, position)) {
+            //         backoffTime--;
+            //     }
+            // }
             
             // Put processed work done (if any) to receiveQueue
             while (!processQueue.isEmpty()) {
@@ -151,6 +201,9 @@ public class Vehicle implements Runnable {
                 if (currentTime >= nextBlock.completionTime) {
                     transmitQueue.add(new Packet(simulatorRef, Config.PACKET_TYPE.PDONE, id, currentTime, nextBlock.appId));
                     processQueue.remove();
+                }
+                else {
+                    break;
                 }
             }
              

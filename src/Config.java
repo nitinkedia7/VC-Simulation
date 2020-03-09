@@ -5,7 +5,7 @@ public class Config {
     static double VEHICLE_SPEED_MAX = 25.0; // m/s
     static double SEGMENT_LENGTH = 600;
     static double TRANSMISSION_RANGE = 300;
-    static int VEHICLE_COUNT = 3;
+    static int VEHICLE_COUNT = 300;
     static enum PACKET_TYPE {
         RREQ, RREP, RJOIN, RACK, RTEAR, PSTART, PDONE;
     }
@@ -18,4 +18,6 @@ public class Config {
     static int PROCESSING_SPEED = 1;
     static int INV_RREQ_PROB = 10;
     static int TOTAL_CHANNEL_COUNT = 5;
+    static int CONTENTION_WINDOW_BASE = 1;
+    static int CONTENTION_WINDOW_MAX = 1024;
 }
