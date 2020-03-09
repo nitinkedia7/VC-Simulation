@@ -134,11 +134,17 @@ public class Simulator implements Runnable {
             timeSync.arriveAndAwaitAdvance();
             currentTime++;
         }
-        System.out.println("Simulation stopped after " + stopTime + " ms");   
+        try {
+            Thread.sleep(10);
+        } catch (Exception e) {
+            System.out.println(e);
+        }
+        System.out.println("Simulation stopped after " + stopTime + " ms");
     }
 
     public static void main(String[] args) {
         Simulator simulator = new Simulator();
         simulator.run();
+        simulator.printStatistics();
     }
 }

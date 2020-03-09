@@ -126,7 +126,8 @@ public class Vehicle implements Runnable {
     }
 
     public int getDonatedResources() {
-        return ThreadLocalRandom.current().nextInt(availableResources);
+        if (availableResources < 10) return availableResources; 
+        return availableResources/2 + ThreadLocalRandom.current().nextInt(availableResources / 2);
     }
 
     public void run() {
@@ -170,7 +171,7 @@ public class Vehicle implements Runnable {
                 }
             }
             // Also get and process receivedPackets
-            int newPacketCount = targetChannel.receivePackets(readTillIndex, currentTime, position, receiveQueue); 
+            int newPacketCount = targetChannel.receivePackets(id, readTillIndex, currentTime, position, receiveQueue); 
             readTillIndex += newPacketCount;
             while (!receiveQueue.isEmpty()) {
                 Packet p = receiveQueue.poll();

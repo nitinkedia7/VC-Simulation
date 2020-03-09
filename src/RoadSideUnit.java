@@ -39,6 +39,7 @@ public class RoadSideUnit implements Runnable {
     public void handleRREQ(Packet reqPacket) {
         int appId = reqPacket.appId;
         if (clouds.containsKey(appId)) {
+            // TODO: handle simultaneous RREQ requests
             return;
         }
         clouds.put(appId, new Cloud(simulatorRef, reqPacket));
@@ -72,7 +73,7 @@ public class RoadSideUnit implements Runnable {
             }
 
             // Also get and process receivedPackets
-            int newPacketCount = targetChannel.receivePackets(readTillIndex, currentTime, position, receiveQueue); 
+            int newPacketCount = targetChannel.receivePackets(id, readTillIndex, currentTime, position, receiveQueue); 
             readTillIndex += newPacketCount;
             while (!receiveQueue.isEmpty()) {
                 Packet p = receiveQueue.poll();

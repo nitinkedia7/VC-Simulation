@@ -59,12 +59,12 @@ public class Channel {
         packetQueueLock.writeLock().unlock();
     }
 
-    public int receivePackets(int readTillIndex, int currentTime, double position, Queue<Packet> receiveQueue) {
+    public int receivePackets(int receiverId, int readTillIndex, int currentTime, double position, Queue<Packet> receiveQueue) {
         packetQueueLock.readLock().lock();
         int newPacketCount = packetQueue.size() - readTillIndex;
         while (readTillIndex < packetQueue.size()) {
             Packet packet = packetQueue.get(readTillIndex);
-            if (Math.abs(position - packet.position) <= Config.TRANSMISSION_RANGE) {
+            if (packet.senderId != receiverId && Math.abs(position - packet.position) <= Config.TRANSMISSION_RANGE) {
                 receiveQueue.add(packet);
                 packet.recordReception(currentTime);
             }
