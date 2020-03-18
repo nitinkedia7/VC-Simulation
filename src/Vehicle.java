@@ -158,42 +158,42 @@ public class Vehicle implements Runnable {
 
             // Attempt to transmit packets in transmitQueue
             Channel targetChannel = mediumRef.channels[channelId];
-            if (targetChannel.isFree(id, position)) {
-                while (!transmitQueue.isEmpty()) {
-                    Packet packet = transmitQueue.poll();
-                    targetChannel.transmitPacket(packet, currentTime, position);
-                }        
-                targetChannel.stopTransmit(id);
-                // Reset contention window
-                contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
+            // if (targetChannel.isFree(id, position)) {
+            //     while (!transmitQueue.isEmpty()) {
+            //         Packet packet = transmitQueue.poll();
+            //         targetChannel.transmitPacket(packet, currentTime, position);
+            //     }        
+            //     targetChannel.stopTransmit(id);
+            //     // Reset contention window
+            //     contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
+            // }
+            if (backoffTime == 0) {
+                if (targetChannel.isFree(id, position)) {
+                    while (!transmitQueue.isEmpty()) {
+                        Packet packet = transmitQueue.poll();
+                        targetChannel.transmitPacket(packet, currentTime, position);
+                    }        
+                    targetChannel.stopTransmit(id);
+                    // Reset contention window
+                    contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
+                }
+                else {
+                    contentionWindowSize *= 2;
+                    if (contentionWindowSize > Config.CONTENTION_WINDOW_MAX) {
+                        System.out.println("Vehicle could not transmit in backoff, retrying again");
+                        backoffTime = 0;
+                        contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
+                    }
+                    else {
+                        backoffTime = ThreadLocalRandom.current().nextInt(contentionWindowSize) + 1;
+                    }
+                }
             }
-            // if (backoffTime == 0) {
-            //     if (targetChannel.isFree(id, position)) {
-            //         while (!transmitQueue.isEmpty()) {
-            //             Packet packet = transmitQueue.poll();
-            //             targetChannel.transmitPacket(packet, currentTime, position);
-            //         }        
-            //         targetChannel.stopTransmit(id);
-            //         // Reset contention window
-            //         contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
-            //     }
-            //     else {
-            //         contentionWindowSize *= 2;
-            //         if (contentionWindowSize > Config.CONTENTION_WINDOW_MAX) {
-            //             System.out.println("Vehicle could not transmit in backoff, retrying again");
-            //             backoffTime = 0;
-            //             contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
-            //         }
-            //         else {
-            //             backoffTime = ThreadLocalRandom.current().nextInt(contentionWindowSize) + 1;
-            //         }
-            //     }
-            // }
-            // else {
-            //     if (targetChannel.isFree(id, position)) {
-            //         backoffTime--;
-            //     }
-            // }
+            else {
+                if (targetChannel.isFree(id, position)) {
+                    backoffTime--;
+                }
+            }
             
             // Put processed work done (if any) to receiveQueue
             while (!processQueue.isEmpty()) {

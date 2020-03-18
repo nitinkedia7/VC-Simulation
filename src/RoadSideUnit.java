@@ -57,19 +57,20 @@ public class RoadSideUnit implements Runnable {
             // TODO: handle simultaneous RREQ requests
             return;
         }
+        // Initialise a new cloud with 1 member
         clouds.put(appId, new Cloud(simulatorRef, reqPacket));
-        // Also add the requestor as a donor
-        handleRREP(reqPacket);
     }
 
     public void handleRREP(Packet donorPacket) {
-        int appId = donorPacket.appId;
-        assert clouds.containsKey(appId) && clouds.get(appId) != null && donorPacket != null : "No cloud present for app " + appId;
-        clouds.get(appId).addMember(donorPacket);
-        if (clouds.get(appId).metResourceQuota()) {            
-            clouds.get(appId).recordCloudFormed(currentTime);
-            clouds.get(appId).printStats(true);
-            transmitQueue.add(new Packet(simulatorRef, Config.PACKET_TYPE.RACK, id, currentTime, appId, clouds.get(appId)));
+        Cloud cloud = clouds.get(donorPacket.appId);
+        if (cloud == null) {
+            System.out.println("No cloud present for app " + donorPacket.appId);
+            return;
+        }
+        if (cloud.addMember(donorPacket) && cloud.metResourceQuota()) {
+            cloud.recordCloudFormed(currentTime);
+            cloud.printStats(true);
+            transmitQueue.add(new Packet(simulatorRef, Config.PACKET_TYPE.RACK, id, currentTime, donorPacket.appId, cloud));
         }
     }
 
@@ -79,42 +80,42 @@ public class RoadSideUnit implements Runnable {
             
             // Attempt to transmit packets in transmitQueue
             Channel targetChannel = mediumRef.channels[channelId];
-            if (targetChannel.isFree(id, position)) {
-                while (!transmitQueue.isEmpty()) {
-                    Packet packet = transmitQueue.poll();
-                    targetChannel.transmitPacket(packet, currentTime, position);
-                }        
-                targetChannel.stopTransmit(id);
-                // Reset contention window
-                contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
+            // if (targetChannel.isFree(id, position)) {
+            //     while (!transmitQueue.isEmpty()) {
+            //         Packet packet = transmitQueue.poll();
+            //         targetChannel.transmitPacket(packet, currentTime, position);
+            //     }        
+            //     targetChannel.stopTransmit(id);
+            //     // Reset contention window
+            //     contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
+            // }
+            if (backoffTime == 0) {
+                if (targetChannel.isFree(id, position)) {
+                    while (!transmitQueue.isEmpty()) {
+                        Packet packet = transmitQueue.poll();
+                        targetChannel.transmitPacket(packet, currentTime, position);
+                    }        
+                    targetChannel.stopTransmit(id);
+                    // Reset contention window
+                    contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
+                }
+                else {
+                    contentionWindowSize *= 2;
+                    if (contentionWindowSize > Config.CONTENTION_WINDOW_MAX) {
+                        System.out.println("Vehicle could not transmit in backoff, retrying again");
+                        backoffTime = 0;
+                        contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
+                    }
+                    else {
+                        backoffTime = ThreadLocalRandom.current().nextInt(contentionWindowSize) + 1;
+                    }
+                }
             }
-            // if (backoffTime == 0) {
-            //     if (targetChannel.isFree(id, position)) {
-            //         while (!transmitQueue.isEmpty()) {
-            //             Packet packet = transmitQueue.poll();
-            //             targetChannel.transmitPacket(packet, currentTime, position);
-            //         }        
-            //         targetChannel.stopTransmit(id);
-            //         // Reset contention window
-            //         contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
-            //     }
-            //     else {
-            //         contentionWindowSize *= 2;
-            //         if (contentionWindowSize > Config.CONTENTION_WINDOW_MAX) {
-            //             System.out.println("Vehicle could not transmit in backoff, retrying again");
-            //             backoffTime = 0;
-            //             contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
-            //         }
-            //         else {
-            //             backoffTime = ThreadLocalRandom.current().nextInt(contentionWindowSize) + 1;
-            //         }
-            //     }
-            // }
-            // else {
-            //     if (targetChannel.isFree(id, position)) {
-            //         backoffTime--;
-            //     }
-            // }
+            else {
+                if (targetChannel.isFree(id, position)) {
+                    backoffTime--;
+                }
+            }
 
             // Also get and process receivedPackets
             int newPacketCount = targetChannel.receivePackets(id, readTillIndex, currentTime, position, receiveQueue); 

@@ -17,7 +17,7 @@ public class Packet {
         this.appId = appId;
         this.simulatorRef = simulatorRef;
         simulatorRef.incrGenCount(type);
-        System.out.println("Packet " + ": Sender " + senderId + " generated " + type + " at " + genTime);
+        // System.out.println("Packet " + ": Sender " + senderId + " generated " + type + " at " + genTime);
     }
 
     // Constructor for RREQ
@@ -56,7 +56,7 @@ public class Packet {
     }
 
     public void printRead(int readerId) {
-        System.out.println("Packet : " + readerId + " read " + type + " from " + senderId + " at " + genTime);
+        // System.out.println("Packet : " + readerId + " read " + type + " from " + senderId + " at " + genTime);
         return;
     }
 }

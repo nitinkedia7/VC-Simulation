@@ -114,17 +114,16 @@ public class Simulator implements Runnable {
             totalReceiveTime += packetStats.get(type).totalReceiveTime;
         }
         System.out.println("-----------------------------------------");
-        System.out.println("Total statistics");
+        System.out.println("All packet types");
         System.out.println("Total packets generated = " + totalGeneratedCount);
         System.out.println("Total packets transmitted = " + totalTransmittedCount);
         System.out.println("Total packets received = " + totalReceivedCount);
         System.out.println("Average transmit time in ms = " + decimalFormat.format(((double) totalTransmitTime) / totalTransmittedCount));
         System.out.println("Average receive time in ms = " + decimalFormat.format(((double) totalReceiveTime) / totalReceivedCount));
     
-        System.out.println("Average cluster overhead = " + 
-            totalTransmittedCount / (packetStats.get(Config.PACKET_TYPE.RREQ).transmittedCount + packetStats.get(Config.PACKET_TYPE.RJOIN).transmittedCount)   
-        );
-
+        System.out.println();
+        int totalAppRequests = packetStats.get(Config.PACKET_TYPE.RREQ).transmittedCount + packetStats.get(Config.PACKET_TYPE.RJOIN).transmittedCount;
+        System.out.println("Average cluster overhead = " + decimalFormat.format(((double) totalTransmittedCount) / totalAppRequests));
         System.out.println("Average cloud formation time in ms = " + decimalFormat.format(((double) totalCloudsFormationTime) / totalCloudsFormed));
     }
 

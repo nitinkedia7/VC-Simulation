@@ -9,6 +9,7 @@ public class Cloud {
     int resourceQuotaMetTime;
     Simulator simulatorRef;
     Queue<Packet> pendingRJOINs;
+    Boolean hasFormed;
 
     class Member {
         int vehicleId;
@@ -32,18 +33,27 @@ public class Cloud {
         this.simulatorRef = simulatorRef;
         this.pendingRJOINs = new LinkedList<>();
         this.members = new ArrayList<Member>(); 
+        this.hasFormed = false;
         addMember(packet);
     }
 
-    public void addMember(Packet packet) {
+    public Boolean addMember(Packet packet) {
+        if (hasFormed) {
+            // System.out.println("cannot Add member " + packet.senderId);
+            return false;
+        }
+        // System.out.println("Adding member " + packet.senderId);
         int acceptedResources = Math.min(packet.donatedResources, neededResources);
         neededResources -= acceptedResources;
         for (Member member : members) {
             if (member.vehicleId == packet.senderId) {
-                return;
+                System.out.println("Added member " + packet.senderId);
+                return true;
             }
         }
         members.add(new Member(packet.senderId, acceptedResources));
+        // System.out.println("Added member " + packet.senderId);
+        return true;
     }
 
     public int getDonatedAmount(int vehicleId) {
@@ -67,10 +77,11 @@ public class Cloud {
     }
 
     public Boolean metResourceQuota() {
-        return (neededResources == 0); // returns True is satisfied
+        return (neededResources <= 0); // returns True is satisfied
     }
 
     public void recordCloudFormed(int formedTime) {
+        this.hasFormed = true;
         this.resourceQuotaMetTime = formedTime;
         this.simulatorRef.recordCloudFormed(formedTime - this.initialRequestTime);
         return;
@@ -87,6 +98,7 @@ public class Cloud {
         this.neededResources = packet.reqResources;
         this.initialRequestTime = packet.genTime;
         this.resourceQuotaMetTime = 0;
+        this.hasFormed = false;
         addMember(packet);
         return true;
     }
@@ -98,5 +110,9 @@ public class Cloud {
         }        
         message += ("for app id " + appId + (isForming ? " formed" : " deleted"));
         System.out.println(message);
+    }
+
+    public void test() {
+        System.out.println("SOS");
     }
 }
