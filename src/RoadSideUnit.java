@@ -34,7 +34,7 @@ public class RoadSideUnit implements Runnable {
         timeSync.register();
         this.backoffTime = 0;
         this.contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
-        System.out.println("RSU     " + id + " initialised.");
+        System.out.println("RSU     " + id + " initialised at position " + this.position);
     }
 
     public void handleRJOIN(Packet joinPacket) {
@@ -114,6 +114,7 @@ public class RoadSideUnit implements Runnable {
             else {
                 if (targetChannel.isFree(id, position)) {
                     backoffTime--;
+                    targetChannel.stopTransmit(id);
                 }
             }
 

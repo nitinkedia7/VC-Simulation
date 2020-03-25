@@ -62,7 +62,7 @@ public class Vehicle implements Runnable {
 
         this.timeSync = timeSync;
         timeSync.register();
-        System.out.println("Vehicle " + id + " initialised.");
+        System.out.println("Vehicle " + id + " initialised at position " + this.position);
     } 
 
     public void updatePosition() {
@@ -192,6 +192,7 @@ public class Vehicle implements Runnable {
             else {
                 if (targetChannel.isFree(id, position)) {
                     backoffTime--;
+                    targetChannel.stopTransmit(id);
                 }
             }
             

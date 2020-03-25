@@ -1,11 +1,10 @@
 public class Config {
-    static double ROAD_END = 40000.0; // m
+    static double ROAD_END = 9000.0; // m
     static double ROAD_START = 0.0;
     static double VEHICLE_SPEED_MIN = 8.33; // m/s
     static double VEHICLE_SPEED_MAX = 25.0; // m/s
-    static double SEGMENT_LENGTH = 700;
+    static double SEGMENT_LENGTH = 610;
     static double TRANSMISSION_RANGE = 300;
-    static int VEHICLE_COUNT = 300;
     static enum PACKET_TYPE {
         RREQ, RREP, RJOIN, RACK, RTEAR, PSTART, PDONE;
     }
@@ -20,4 +19,5 @@ public class Config {
     static int TOTAL_CHANNEL_COUNT = 5;
     static int CONTENTION_WINDOW_BASE = 1;
     static int CONTENTION_WINDOW_MAX = 1024;
+    static String OUTPUT_FILENAME = "output.txt"; 
 }

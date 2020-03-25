@@ -1,3 +1,10 @@
+# How to Run
+1. Navigate to src/ folder by ```cd src```
+2. Delete class files using ```rm *.class```
+3. Compile by ```javac Simulation.java```
+4. Run using ```java Simulation```.
+The output may be redirected to a log file using ```java Simulation >../logs/1.txt```
+
 # Interim Statistics
 RREQ/RREP/RACK message count.
 
@@ -58,3 +65,29 @@ Packet : Sender 1 wrote RREP at 4
 Packet : Sender 2 generated RREP at 5
 ```
 2. Two writes in same interval, need CSMA specs like 50ms control phase etc.
+
+
+/*
+                if (backoff == 0)
+                {
+                    if channel is free {
+                        transmit
+                        backoff = 0
+                        cw = cw_base
+                    }
+                    else {
+                        cw *= 2
+                        if (cw < cw_max) {
+                            backoff = rand(cw) + 1
+                        }
+                        else {
+                            // could not transfer start all over again
+                        }
+                    }
+                }
+                else {
+                    if channel is free {
+                        decrement backoff
+                    }
+                }
+            */

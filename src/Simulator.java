@@ -1,10 +1,12 @@
-import java.text.DecimalFormat;
 import java.util.*;
 import java.util.concurrent.Phaser;
+import java.text.DecimalFormat;
+import java.io.*;
 
 public class Simulator implements Runnable {
     int currentTime;
     int stopTime;
+    int totalVehicleCount;
     ArrayList<Vehicle> vehicles;
     ArrayList<RoadSideUnit> roadSideUnits;
     Medium medium;
@@ -42,9 +44,10 @@ public class Simulator implements Runnable {
     int totalCloudsFormed;
     int totalCloudsFormationTime;
 
-    public Simulator() {
+    public Simulator(int givenVehicleCount) {
         currentTime = 0;
         stopTime = Config.STOP_TIME;
+        totalVehicleCount = givenVehicleCount;
         timeSync = new Phaser();
         timeSync.register();
         medium = new Medium();
@@ -61,7 +64,7 @@ public class Simulator implements Runnable {
 
         // Spawn vehicles at random positions
         vehicles  = new ArrayList<Vehicle>();
-        for (int i = 1; i <= Config.VEHICLE_COUNT; i++) {
+        for (int i = 1; i <= totalVehicleCount; i++) {
             vehicles.add(new Vehicle(i, timeSync, this, medium, stopTime));
         }
 
@@ -121,10 +124,20 @@ public class Simulator implements Runnable {
         System.out.println("Average transmit time in ms = " + decimalFormat.format(((double) totalTransmitTime) / totalTransmittedCount));
         System.out.println("Average receive time in ms = " + decimalFormat.format(((double) totalReceiveTime) / totalReceivedCount));
     
-        System.out.println();
         int totalAppRequests = packetStats.get(Config.PACKET_TYPE.RREQ).transmittedCount + packetStats.get(Config.PACKET_TYPE.RJOIN).transmittedCount;
-        System.out.println("Average cluster overhead = " + decimalFormat.format(((double) totalTransmittedCount) / totalAppRequests));
-        System.out.println("Average cloud formation time in ms = " + decimalFormat.format(((double) totalCloudsFormationTime) / totalCloudsFormed));
+        double averageClusterOverhead = ((double) totalTransmittedCount) / totalAppRequests;
+        double averageCloudFormationTime = ((double) totalCloudsFormationTime) / totalCloudsFormed;
+        System.out.println();
+        System.out.println("Average cluster overhead = " + decimalFormat.format(averageClusterOverhead));
+        System.out.println("Average cloud formation time in ms = " + decimalFormat.format(averageCloudFormationTime));
+    
+        try {
+            FileWriter fw = new FileWriter(Config.OUTPUT_FILENAME, true);
+            fw.write(totalVehicleCount + "," + averageClusterOverhead + "," + averageCloudFormationTime + "\n");
+            fw.close();
+        } catch (IOException ioe) {
+            System.err.println("IOException: " + ioe.getMessage());
+        }
     }
 
     public void run() {
@@ -140,16 +153,34 @@ public class Simulator implements Runnable {
             currentTime++;
         }
         try {
-            Thread.sleep(10);
+            Thread.sleep(50);
         } catch (Exception e) {
             System.out.println(e);
         }
         System.out.println("Simulation stopped after " + stopTime + " ms");
     }
 
+    // public static void main(String[] args) {
+    //     Simulator simulator = new Simulator();
+    //     simulator.run();
+    //     simulator.printStatistics();
+    // }
+
     public static void main(String[] args) {
-        Simulator simulator = new Simulator();
-        simulator.run();
-        simulator.printStatistics();
+        try {
+            FileWriter fw = new FileWriter(Config.OUTPUT_FILENAME);
+            fw.write("Number of Vehicles,Average Cluster Overhead,Average Cloud Formation Time\n");
+            fw.close();
+        } catch (IOException ioe) {
+            System.err.println("IOException: " + ioe.getMessage());
+        }
+
+        int segmentCount = (int) Math.ceil(Config.ROAD_END / Config.SEGMENT_LENGTH);
+        for (int vehiclesPerSegment = 12; vehiclesPerSegment <= 64; vehiclesPerSegment += 4) {
+            int totalVehicleCount = vehiclesPerSegment * segmentCount;
+            Simulator simulator = new Simulator(totalVehicleCount);
+            simulator.run();
+            simulator.printStatistics();
+        }
     }
 }
