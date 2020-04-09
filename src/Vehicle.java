@@ -18,13 +18,13 @@ public class Vehicle implements Runnable {
     Queue<Packet> transmitQueue;
     Queue<Packet> receiveQueue;
     int readTillIndex;
-    int availableResources;
     int backoffTime;
     int contentionWindowSize;
     
     class ProcessBlock {
         int completionTime;
         int appId;
+        int workAmount;
 
         public ProcessBlock(int appId, int donatedResources) {
             if (currentTime > bookedTillTime) {
@@ -32,7 +32,8 @@ public class Vehicle implements Runnable {
             }
             bookedTillTime += donatedResources * Config.PROCESSING_SPEED;
             this.completionTime = bookedTillTime;
-            this.appId = appId;  
+            this.appId = appId;
+            this.workAmount = donatedResources;  
         }
     }
     int bookedTillTime;
@@ -49,14 +50,13 @@ public class Vehicle implements Runnable {
         this.stopTime = stopTime;
         this.simulatorRef = simulatorRef;
         this.mediumRef = mediumRef;
-        clouds = new HashMap<Integer, Cloud>();
+        this.clouds = new HashMap<Integer, Cloud>();
         this.channelId = 0;
         this.transmitQueue = new LinkedList<Packet>();
         this.receiveQueue = new LinkedList<Packet>();
         this.readTillIndex = 0;
-        this.availableResources = Config.MAX_RESOURCE_QUOTA;
         this.bookedTillTime = 0;
-        processQueue = new LinkedList<ProcessBlock>();
+        this.processQueue = new LinkedList<ProcessBlock>();
         this.backoffTime = 0;
         this.contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
 
@@ -101,11 +101,8 @@ public class Vehicle implements Runnable {
     }
 
     public void handleRREQ(Packet p) {
-        int donatedResources = getDonatedResources();
-        if (donatedResources > 0) {
-            // availableResources -= donatedResources;
-            transmitQueue.add(new Packet(simulatorRef, Config.PACKET_TYPE.RREP, id, currentTime, direction * speed, p.appId, donatedResources));
-        }
+        // Send a RREP in reply
+        transmitQueue.add(new Packet(simulatorRef, Config.PACKET_TYPE.RREP, id, currentTime, direction * speed, p.appId));
     }
 
     public void handleRJOIN(Packet joinPacket) {
@@ -123,7 +120,6 @@ public class Vehicle implements Runnable {
         Cloud cloud = ackPacket.cloud;
         clouds.put(ackPacket.appId, cloud);
         if (isCloudLeader(cloud)) {
-            cloud.workingMemberCount = cloud.members.size();
             Packet pstartPacket = new Packet(simulatorRef, Config.PACKET_TYPE.PSTART, id, currentTime, cloud.appId, cloud);
             transmitQueue.add(pstartPacket);
             handlePSTART(pstartPacket); // honor self-contribution
@@ -132,9 +128,9 @@ public class Vehicle implements Runnable {
     
     public void handlePSTART(Packet startPacket) {
         // Add an alarm for contribution
-        int donatedResources = startPacket.cloud.getDonatedAmount(id);
-        if (donatedResources > 0) {
-            processQueue.add(new ProcessBlock(startPacket.appId, donatedResources));
+        int assignedWork = startPacket.workAssignment.get(id);
+        if (assignedWork > 0) {
+            processQueue.add(new ProcessBlock(startPacket.appId, assignedWork));
         }
         return;
     }
@@ -142,11 +138,10 @@ public class Vehicle implements Runnable {
     public void handlePDONE(Packet donePacket) {
         Cloud cloud = clouds.get(donePacket.appId);
         if (!isCloudLeader(cloud)) return;
-        cloud.markAsDone(donePacket.senderId);
+        cloud.markAsDone(donePacket.senderId, donePacket.workDoneAmount);
         if (cloud.workingMemberCount == 0) {
-            if (cloud.processPendingRJOIN()) {
-                cloud.workingMemberCount = cloud.members.size();
-                Packet pstartPacket = new Packet(simulatorRef, Config.PACKET_TYPE.PSTART, id, currentTime, cloud.appId, cloud);
+            if (cloud.processPendingRJOIN(currentTime)) {
+                Packet pstartPacket = new Packet(simulatorRef, Config.PACKET_TYPE.PSTART, id, currentTime, cloud.appId, cloud.getWorkAssignment());
                 transmitQueue.add(pstartPacket);
                 handlePSTART(pstartPacket);
             }
@@ -159,26 +154,25 @@ public class Vehicle implements Runnable {
     }
 
     public void handleRLEAVE(Packet packet) {
-        /*
-        // Case I: Leader leaves
-        if (this.id == nextLeader) {
-            cloud.currentLeader = this.id;        
-        }
-        
-        // Case II: Member leaves
-        if (this.id == currentLeader) {
+        Cloud cloud = clouds.get(packet.appId);
+        if (cloud == null) return;
 
-        }    
-        */
+        // First, reassign leader if needed
+        if (cloud.isCloudLeader(packet.senderId) && cloud.isNextLeader(id)) {
+            cloud.assignNextLeader();
+            simulatorRef.incrLeaderChangeCount();
+        }
+        // Then reassign the left work
+        if (cloud.isCloudLeader(id)) {
+            Map<Integer, Integer> workAssignment = cloud.reassignWork(packet.senderId);
+            Packet pstartPacket = new Packet(simulatorRef, Config.PACKET_TYPE.PSTART, id, currentTime, cloud.appId, workAssignment);
+            transmitQueue.add(pstartPacket);
+            handlePSTART(pstartPacket);
+        }
     }
 
     public Boolean isCloudLeader(Cloud cloud) {
         return cloud != null && cloud.currentLeaderId == id;  
-    }
-
-    public int getDonatedResources() {
-        if (availableResources < 10) return availableResources; 
-        return availableResources/2 + ThreadLocalRandom.current().nextInt(availableResources / 2);
     }
 
     public void run() {
@@ -222,7 +216,7 @@ public class Vehicle implements Runnable {
             while (!processQueue.isEmpty()) {
                 ProcessBlock nextBlock = processQueue.peek();
                 if (currentTime >= nextBlock.completionTime) {
-                    transmitQueue.add(new Packet(simulatorRef, Config.PACKET_TYPE.PDONE, id, currentTime, nextBlock.appId));
+                    transmitQueue.add(new Packet(simulatorRef, Config.PACKET_TYPE.PDONE, id, currentTime, nextBlock.appId, nextBlock.workAmount));
                     processQueue.remove();
                 }
                 else {
@@ -236,13 +230,13 @@ public class Vehicle implements Runnable {
                 int appType = ThreadLocalRandom.current().nextInt(Config.APPLICATION_TYPE_COUNT);
                 if (clouds.getOrDefault(appType, null) != null) { // RJOIN
                     Packet pendingPacket = 
-                        new Packet(simulatorRef, Config.PACKET_TYPE.RJOIN, id, currentTime, speed * direction, appType, getDonatedResources());
+                        new Packet(simulatorRef, Config.PACKET_TYPE.RJOIN, id, currentTime, speed * direction, appType, Config.MAX_RESOURCE_QUOTA);
                     transmitQueue.add(pendingPacket);
                     handleRJOIN(pendingPacket);
                 } 
                 else { // RREQ
                     transmitQueue.add(
-                        new Packet(simulatorRef, Config.PACKET_TYPE.RREQ, id, currentTime, speed * direction, appType, Config.MAX_RESOURCE_QUOTA, getDonatedResources())
+                        new Packet(simulatorRef, Config.PACKET_TYPE.RREQ, id, currentTime, speed * direction, appType, Config.MAX_RESOURCE_QUOTA)
                     );
                 }
             }

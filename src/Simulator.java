@@ -135,10 +135,11 @@ public class Simulator implements Runnable {
         System.out.println();
         System.out.println("Average cluster overhead = " + decimalFormat.format(averageClusterOverhead));
         System.out.println("Average cloud formation time in ms = " + decimalFormat.format(averageCloudFormationTime));
-    
+        System.out.println("Leader change count = " +leaderChangeCount);
+
         try {
             FileWriter fw = new FileWriter(Config.OUTPUT_FILENAME, true);
-            fw.write(totalVehicleCount + "," + averageClusterOverhead + "," + averageCloudFormationTime + "\n");
+            fw.write(totalVehicleCount + "," + averageClusterOverhead + "," + averageCloudFormationTime + "," + leaderChangeCount +"\n");
             fw.close();
         } catch (IOException ioe) {
             System.err.println("IOException: " + ioe.getMessage());
@@ -174,7 +175,7 @@ public class Simulator implements Runnable {
     public static void main(String[] args) {
         try {
             FileWriter fw = new FileWriter(Config.OUTPUT_FILENAME);
-            fw.write("Number of Vehicles,Average Cluster Overhead,Average Cloud Formation Time\n");
+            fw.write("Number of Vehicles,Average Cluster Overhead,Average Cloud Formation Time,Leader Change Count\n");
             fw.close();
         } catch (IOException ioe) {
             System.err.println("IOException: " + ioe.getMessage());

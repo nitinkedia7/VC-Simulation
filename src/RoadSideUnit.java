@@ -47,14 +47,11 @@ public class RoadSideUnit implements Runnable {
         }
     }
 
-    public Boolean isCloudLeader(Cloud cloud) {
-        return cloud != null && cloud.currentLeaderId == id;  
-    }
-
     public void handleRREQ(Packet reqPacket) {
         int appId = reqPacket.appId;
         if (clouds.containsKey(appId)) {
             // TODO: handle simultaneous RREQ requests
+            // Currently, if RREQ's collide, only the first survives
             return;
         }
         // Initialise a new cloud with 1 member
@@ -67,11 +64,16 @@ public class RoadSideUnit implements Runnable {
             System.out.println("No cloud present for app " + donorPacket.appId);
             return;
         }
-        if (cloud.addMember(donorPacket) && cloud.metResourceQuota()) {
-            cloud.finaliseCloud(currentTime);
-            cloud.printStats(true);
-            transmitQueue.add(new Packet(simulatorRef, Config.PACKET_TYPE.RACK, id, currentTime, donorPacket.appId, cloud));
+        cloud.addMember(donorPacket);
+        if (!cloud.hasFormed && cloud.metResourceQuota()) {
+            cloud.electLeader();
+            cloud.recordCloudFormed(currentTime);
+            transmitQueue.add(new Packet(simulatorRef, Config.PACKET_TYPE.RACK, id, currentTime, donorPacket.appId, cloud.getWorkAssignment()));
         }
+    }
+
+    public Boolean isCloudLeader(Cloud cloud) {
+        return cloud != null && cloud.currentLeaderId == id;  
     }
 
     public void run() {
