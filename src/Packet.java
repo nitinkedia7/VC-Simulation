@@ -42,7 +42,7 @@ public class Packet {
     // Constructor for RACK
     public Packet(Simulator simulatorRef, Config.PACKET_TYPE type, int senderId, int genTime, int appId, Cloud cloud) {
         this(simulatorRef, type, senderId, genTime, appId);
-        assert (type == Config.PACKET_TYPE.RACK || type == Config.PACKET_TYPE.PSTART) : "Packet constructor type mismatch";
+        assert (type == Config.PACKET_TYPE.RACK) : "Packet constructor type mismatch";
         this.cloud = cloud;
     }
 

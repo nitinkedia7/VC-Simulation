@@ -162,8 +162,8 @@ public class Cloud {
                 if (member.donatedResources == 0) {
                     member.completed = true;
                     workingMemberCount -= 1;
-                    return;
                 } 
+                return;
             }
         }
         System.out.println(vehicleId + " is not a working member of this cloud " + appId);

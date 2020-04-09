@@ -44,6 +44,7 @@ public class Simulator implements Runnable {
     int totalCloudsFormed;
     int totalCloudsFormationTime;
     int leaderChangeCount;
+    int leaderLeaveCount;
 
     public Simulator(int givenVehicleCount) {
         currentTime = 0;
@@ -53,7 +54,7 @@ public class Simulator implements Runnable {
         timeSync.register();
         medium = new Medium();
         decimalFormat = new DecimalFormat();
-        decimalFormat.setMaximumFractionDigits(2);
+        decimalFormat.setMaximumFractionDigits(3);
 
         packetStats = new HashMap<Config.PACKET_TYPE, PacketStat>();
         for (Config.PACKET_TYPE type : Config.PACKET_TYPE.values()) {
@@ -63,6 +64,7 @@ public class Simulator implements Runnable {
         totalCloudsFormed = 0;
         totalCloudsFormationTime = 0;
         leaderChangeCount = 0;
+        leaderLeaveCount = 0;
         // Spawn vehicles at random positions
         vehicles  = new ArrayList<Vehicle>();
         for (int i = 1; i <= totalVehicleCount; i++) {
@@ -106,6 +108,10 @@ public class Simulator implements Runnable {
         leaderChangeCount++;
     }
 
+    public synchronized void incrLeaderLeaveCount() {
+        leaderLeaveCount++;
+    }
+
     public void printStatistics() {
         int totalGeneratedCount = 0;
         int totalTransmittedCount = 0;
@@ -136,10 +142,11 @@ public class Simulator implements Runnable {
         System.out.println("Average cluster overhead = " + decimalFormat.format(averageClusterOverhead));
         System.out.println("Average cloud formation time in ms = " + decimalFormat.format(averageCloudFormationTime));
         System.out.println("Leader change count = " +leaderChangeCount);
+        System.out.println("Leader leave count = " +leaderLeaveCount);
 
         try {
             FileWriter fw = new FileWriter(Config.OUTPUT_FILENAME, true);
-            fw.write(totalVehicleCount + "," + averageClusterOverhead + "," + averageCloudFormationTime + "," + leaderChangeCount +"\n");
+            fw.write(totalVehicleCount + "," + decimalFormat.format(averageClusterOverhead) + "," + decimalFormat.format(averageCloudFormationTime) + "," + leaderChangeCount +"\n");
             fw.close();
         } catch (IOException ioe) {
             System.err.println("IOException: " + ioe.getMessage());
@@ -159,22 +166,16 @@ public class Simulator implements Runnable {
             currentTime++;
         }
         try {
-            Thread.sleep(50);
+            Thread.sleep(1000);
         } catch (Exception e) {
             System.out.println(e);
         }
         System.out.println("Simulation stopped after " + stopTime + " ms");
     }
 
-    // public static void main(String[] args) {
-    //     Simulator simulator = new Simulator();
-    //     simulator.run();
-    //     simulator.printStatistics();
-    // }
-
     public static void main(String[] args) {
         try {
-            FileWriter fw = new FileWriter(Config.OUTPUT_FILENAME);
+            FileWriter fw = new FileWriter(Config.OUTPUT_FILENAME, true);
             fw.write("Number of Vehicles,Average Cluster Overhead,Average Cloud Formation Time,Leader Change Count\n");
             fw.close();
         } catch (IOException ioe) {
@@ -182,7 +183,7 @@ public class Simulator implements Runnable {
         }
 
         int segmentCount = (int) Math.ceil(Config.ROAD_END / Config.SEGMENT_LENGTH);
-        for (int vehiclesPerSegment = 24; vehiclesPerSegment <= 24; vehiclesPerSegment += 4) {
+        for (int vehiclesPerSegment = 40; vehiclesPerSegment <= 40; vehiclesPerSegment += 4) {
             int totalVehicleCount = vehiclesPerSegment * segmentCount;
             Simulator simulator = new Simulator(totalVehicleCount);
             simulator.run();

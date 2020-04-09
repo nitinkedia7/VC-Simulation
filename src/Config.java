@@ -1,5 +1,5 @@
 public class Config {
-    static double ROAD_END = 9000.0; // m
+    static double ROAD_END = 30500.0; // m
     static double ROAD_START = 0.0;
     static double VEHICLE_SPEED_MIN = 8.33; // m/s
     static double VEHICLE_SPEED_MAX = 25.0; // m/s
@@ -12,16 +12,16 @@ public class Config {
     static boolean useFair = true;
     static int APPLICATION_TYPE_COUNT = 5;
     static int TRY_LOCK_WAIT_TIME = 100;
-    static int STOP_TIME = 10000;
+    static int STOP_TIME = 45000;
     // A vehicle stays in a segment for a minimum of 24 s,
     // as given by segment length (600 m) / max speed (25 m/s).
     static int MAX_RESOURCE_QUOTA = 1000; // should in order of seconds
     static int WORK_CHUNK_SIZE = 250;
     static int PROCESSING_SPEED = 1;
     
-    static int INV_RREQ_PROB = 10000;
+    static int INV_RREQ_PROB = 2000;
     static int TOTAL_CHANNEL_COUNT = 5;
     static int CONTENTION_WINDOW_BASE = 1;
     static int CONTENTION_WINDOW_MAX = 1024;
-    static String OUTPUT_FILENAME = "output.txt"; 
+    static String OUTPUT_FILENAME = "../output/output.txt"; 
 }

@@ -62,14 +62,22 @@ public class Vehicle implements Runnable {
 
         this.timeSync = timeSync;
         timeSync.register();
-        System.out.println("Vehicle " + id + " initialised at position " + this.position);
+        // System.out.println("Vehicle " + id + " initialised at position " + this.position);
     } 
 
     public boolean hasSegmentChanged(double oldPosition, double newPosition) {
         int oldSegmentId = (int) (oldPosition / Config.SEGMENT_LENGTH);
         int newSegmentId = (int) (newPosition / Config.SEGMENT_LENGTH);
         return oldSegmentId != newSegmentId;
-    }                   
+    }
+    
+    // public boolean almostInNewSegment(double position) {
+    //     int segmentId = (int) (position / Config.SEGMENT_LENGTH);
+    //     double segmentEnd = (segmentId + 1) * Config.SEGMENT_LENGTH;
+    //     if ((segmentEnd - position) / Config.SEGMENT_LENGTH > 0.9) {
+    //         return true;
+    //     }
+    // }
 
     public void updatePosition() {
         double newPosition = position + direction * speed * (currentTime- lastUpdated);
@@ -77,10 +85,13 @@ public class Vehicle implements Runnable {
         else if (newPosition < Config.ROAD_START) newPosition = Config.ROAD_END;
         if (hasSegmentChanged(position, newPosition)) {
             clouds.forEach((appId, cloud) -> {
-                if (cloud.isMember(id)) {
+                if (cloud != null && cloud.isMember(id)) {
                     transmitQueue.add(
                         new Packet(simulatorRef, Config.PACKET_TYPE.RLEAVE, id, currentTime, appId)
                     );
+                }
+                if (cloud != null && cloud.isCloudLeader(id)) {
+                    simulatorRef.incrLeaderLeaveCount();
                 }
             });
             clouds.clear();
@@ -107,7 +118,7 @@ public class Vehicle implements Runnable {
 
     public void handleRJOIN(Packet joinPacket) {
         Cloud cloud = clouds.get(joinPacket.appId);
-        if (isCloudLeader(cloud)) {
+        if (cloud != null && cloud.isCloudLeader(id)) {
             cloud.addRJOINPacket(joinPacket);
         }
         else {
@@ -119,8 +130,8 @@ public class Vehicle implements Runnable {
         // Save this cloud
         Cloud cloud = ackPacket.cloud;
         clouds.put(ackPacket.appId, cloud);
-        if (isCloudLeader(cloud)) {
-            Packet pstartPacket = new Packet(simulatorRef, Config.PACKET_TYPE.PSTART, id, currentTime, cloud.appId, cloud);
+        if (cloud != null && cloud.isCloudLeader(id)) {
+            Packet pstartPacket = new Packet(simulatorRef, Config.PACKET_TYPE.PSTART, id, currentTime, cloud.appId, cloud.getWorkAssignment());
             transmitQueue.add(pstartPacket);
             handlePSTART(pstartPacket); // honor self-contribution
         }
@@ -128,7 +139,7 @@ public class Vehicle implements Runnable {
     
     public void handlePSTART(Packet startPacket) {
         // Add an alarm for contribution
-        int assignedWork = startPacket.workAssignment.get(id);
+        int assignedWork = startPacket.workAssignment.getOrDefault(id, 0);
         if (assignedWork > 0) {
             processQueue.add(new ProcessBlock(startPacket.appId, assignedWork));
         }
@@ -137,7 +148,8 @@ public class Vehicle implements Runnable {
 
     public void handlePDONE(Packet donePacket) {
         Cloud cloud = clouds.get(donePacket.appId);
-        if (!isCloudLeader(cloud)) return;
+        if (cloud == null || !cloud.isCloudLeader(id)) return;
+
         cloud.markAsDone(donePacket.senderId, donePacket.workDoneAmount);
         if (cloud.workingMemberCount == 0) {
             if (cloud.processPendingRJOIN(currentTime)) {
@@ -169,10 +181,6 @@ public class Vehicle implements Runnable {
             transmitQueue.add(pstartPacket);
             handlePSTART(pstartPacket);
         }
-    }
-
-    public Boolean isCloudLeader(Cloud cloud) {
-        return cloud != null && cloud.currentLeaderId == id;  
     }
 
     public void run() {

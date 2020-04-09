@@ -34,16 +34,13 @@ public class RoadSideUnit implements Runnable {
         timeSync.register();
         this.backoffTime = 0;
         this.contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
-        System.out.println("RSU     " + id + " initialised at position " + this.position);
+        // System.out.println("RSU     " + id + " initialised at position " + this.position);
     }
 
     public void handleRJOIN(Packet joinPacket) {
         Cloud cloud = clouds.get(joinPacket.appId);
-        if (isCloudLeader(cloud)) {
+        if (cloud != null && cloud.isCloudLeader(id)) {
             cloud.addRJOINPacket(joinPacket);
-        }
-        else {
-            // do nothing, cloud leader will redistribute the work
         }
     }
 
@@ -68,12 +65,8 @@ public class RoadSideUnit implements Runnable {
         if (!cloud.hasFormed && cloud.metResourceQuota()) {
             cloud.electLeader();
             cloud.recordCloudFormed(currentTime);
-            transmitQueue.add(new Packet(simulatorRef, Config.PACKET_TYPE.RACK, id, currentTime, donorPacket.appId, cloud.getWorkAssignment()));
+            transmitQueue.add(new Packet(simulatorRef, Config.PACKET_TYPE.RACK, id, currentTime, donorPacket.appId, cloud));
         }
-    }
-
-    public Boolean isCloudLeader(Cloud cloud) {
-        return cloud != null && cloud.currentLeaderId == id;  
     }
 
     public void run() {
