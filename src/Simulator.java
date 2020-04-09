@@ -43,6 +43,7 @@ public class Simulator implements Runnable {
     Map<Config.PACKET_TYPE, PacketStat> packetStats;
     int totalCloudsFormed;
     int totalCloudsFormationTime;
+    int leaderChangeCount;
 
     public Simulator(int givenVehicleCount) {
         currentTime = 0;
@@ -61,7 +62,7 @@ public class Simulator implements Runnable {
         }
         totalCloudsFormed = 0;
         totalCloudsFormationTime = 0;
-
+        leaderChangeCount = 0;
         // Spawn vehicles at random positions
         vehicles  = new ArrayList<Vehicle>();
         for (int i = 1; i <= totalVehicleCount; i++) {
@@ -99,6 +100,10 @@ public class Simulator implements Runnable {
     public synchronized void recordCloudFormed(int formationTime) {
         totalCloudsFormed++;
         totalCloudsFormationTime += formationTime;
+    }
+
+    public synchronized void incrLeaderChangeCount() {
+        leaderChangeCount++;
     }
 
     public void printStatistics() {
@@ -176,7 +181,7 @@ public class Simulator implements Runnable {
         }
 
         int segmentCount = (int) Math.ceil(Config.ROAD_END / Config.SEGMENT_LENGTH);
-        for (int vehiclesPerSegment = 12; vehiclesPerSegment <= 64; vehiclesPerSegment += 4) {
+        for (int vehiclesPerSegment = 24; vehiclesPerSegment <= 24; vehiclesPerSegment += 4) {
             int totalVehicleCount = vehiclesPerSegment * segmentCount;
             Simulator simulator = new Simulator(totalVehicleCount);
             simulator.run();

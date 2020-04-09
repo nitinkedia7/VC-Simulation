@@ -29,7 +29,6 @@ public class Packet {
         this.velocity = velocity;
     }    
 
-
     // Constructor for RREP, RJOIN
     public Packet(Simulator simulatorRef, Config.PACKET_TYPE type, int senderId, int genTime, double velocity, int appId, int donatedResources) {
         this(simulatorRef, type, senderId, genTime, appId);

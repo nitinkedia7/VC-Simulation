@@ -48,7 +48,7 @@ public class RoadSideUnit implements Runnable {
     }
 
     public Boolean isCloudLeader(Cloud cloud) {
-        return cloud != null && cloud.requestorId == id;  
+        return cloud != null && cloud.currentLeaderId == id;  
     }
 
     public void handleRREQ(Packet reqPacket) {
@@ -68,7 +68,7 @@ public class RoadSideUnit implements Runnable {
             return;
         }
         if (cloud.addMember(donorPacket) && cloud.metResourceQuota()) {
-            cloud.recordCloudFormed(currentTime);
+            cloud.finaliseCloud(currentTime);
             cloud.printStats(true);
             transmitQueue.add(new Packet(simulatorRef, Config.PACKET_TYPE.RACK, id, currentTime, donorPacket.appId, cloud));
         }
@@ -77,44 +77,37 @@ public class RoadSideUnit implements Runnable {
     public void run() {
         while (currentTime <= stopTime) {
             // System.out.println("RSU     " + id + " starting interval " + currentTime);
-            
-            // Attempt to transmit packets in transmitQueue
             Channel targetChannel = mediumRef.channels[channelId];
-            // if (targetChannel.isFree(id, position)) {
-            //     while (!transmitQueue.isEmpty()) {
-            //         Packet packet = transmitQueue.poll();
-            //         targetChannel.transmitPacket(packet, currentTime, position);
-            //     }        
-            //     targetChannel.stopTransmit(id);
-            //     // Reset contention window
-            //     contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
-            // }
-            if (backoffTime == 0) {
-                if (targetChannel.isFree(id, position)) {
-                    while (!transmitQueue.isEmpty()) {
-                        Packet packet = transmitQueue.poll();
-                        targetChannel.transmitPacket(packet, currentTime, position);
-                    }        
-                    targetChannel.stopTransmit(id);
-                    // Reset contention window
-                    contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
-                }
-                else {
-                    contentionWindowSize *= 2;
-                    if (contentionWindowSize > Config.CONTENTION_WINDOW_MAX) {
-                        System.out.println("Vehicle could not transmit in backoff, retrying again");
-                        backoffTime = 0;
+            
+            // Attempt to transmit packets in transmitQueue only if there are any pending packets
+            if (!transmitQueue.isEmpty()) {
+                if (backoffTime == 0) {
+                    if (targetChannel.isFree(id, position)) {
+                        while (!transmitQueue.isEmpty()) {
+                            Packet packet = transmitQueue.poll();
+                            targetChannel.transmitPacket(packet, currentTime, position);
+                        }        
+                        targetChannel.stopTransmit(id);
+                        // Reset contention window
                         contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
                     }
                     else {
-                        backoffTime = ThreadLocalRandom.current().nextInt(contentionWindowSize) + 1;
+                        contentionWindowSize *= 2;
+                        if (contentionWindowSize > Config.CONTENTION_WINDOW_MAX) {
+                            System.out.println("Vehicle could not transmit in backoff, retrying again");
+                            backoffTime = 0;
+                            contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
+                        }
+                        else {
+                            backoffTime = ThreadLocalRandom.current().nextInt(contentionWindowSize) + 1;
+                        }
                     }
                 }
-            }
-            else {
-                if (targetChannel.isFree(id, position)) {
-                    backoffTime--;
-                    targetChannel.stopTransmit(id);
+                else {
+                    if (targetChannel.isFree(id, position)) {
+                        backoffTime--;
+                        targetChannel.stopTransmit(id);
+                    }
                 }
             }
 

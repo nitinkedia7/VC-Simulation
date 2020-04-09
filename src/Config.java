@@ -6,9 +6,9 @@ public class Config {
     static double SEGMENT_LENGTH = 610;
     static double TRANSMISSION_RANGE = 300;
     static enum PACKET_TYPE {
-        RREQ, RREP, RJOIN, RACK, RTEAR, PSTART, PDONE;
+        RREQ, RREP, RJOIN, RACK, RTEAR, PSTART, PDONE, RLEAVE;
     }
-    static int PACKET_TYPE_COUNT = 7;
+    static int PACKET_TYPE_COUNT = 8;
     static boolean useFair = true;
     static int APPLICATION_TYPE_COUNT = 5;
     static int TRY_LOCK_WAIT_TIME = 100;

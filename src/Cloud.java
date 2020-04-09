@@ -2,6 +2,7 @@ import java.util.*;
 
 public class Cloud {
     int appId;
+    int currentLeaderId;
     int requestorId;
     int neededResources;
     int workingMemberCount;
@@ -24,6 +25,17 @@ public class Cloud {
     }    
     List<Member> members;
 
+    class Leader {
+        int vehicleId;
+        boolean isMember;
+
+        public Leader(int vehicleId, boolean isMember) {
+            this.vehicleId = vehicleId;
+            this.isMember = isMember;
+        }
+    }
+    Queue<Leader> futureLeaders;
+
     public Cloud(Simulator simulatorRef, Packet packet) {
         this.appId = packet.appId;
         this.requestorId = packet.senderId;
@@ -32,7 +44,8 @@ public class Cloud {
         this.resourceQuotaMetTime = 0;
         this.simulatorRef = simulatorRef;
         this.pendingRJOINs = new LinkedList<>();
-        this.members = new ArrayList<Member>(); 
+        this.members = new ArrayList<Member>();
+        this.futureLeaders = new LinkedList<Leader>(); 
         this.hasFormed = false;
         addMember(packet);
     }
@@ -54,6 +67,13 @@ public class Cloud {
         members.add(new Member(packet.senderId, acceptedResources));
         // System.out.println("Added member " + packet.senderId);
         return true;
+    }
+
+    public boolean isMember(int id) {
+        for (Member member : members) {
+            if (member.vehicleId == id) return true;
+        } 
+        return false;
     }
 
     public int getDonatedAmount(int vehicleId) {
@@ -85,6 +105,18 @@ public class Cloud {
         this.resourceQuotaMetTime = formedTime;
         this.simulatorRef.recordCloudFormed(formedTime - this.initialRequestTime);
         return;
+    }
+
+    public void finaliseCloud(int formedTime) {
+        // elect leader and make the future leaders
+        // currently the requestor is the leader, TODO: LQI
+        for (Member member : members) {
+            futureLeaders.add(new Leader(member.vehicleId, true));
+        }
+        currentLeaderId = futureLeaders.peek().vehicleId;
+        futureLeaders.poll();
+        // record cloud formed
+        this.recordCloudFormed(formedTime);
     }
 
     public void addRJOINPacket(Packet packet) {

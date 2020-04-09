@@ -1,9 +1,14 @@
+# VS Code
+.vscode
+
 # Compiled class file
 *.class
 
 # Log file
 *.log
 logs/
+output/
+test/
 
 # BlueJ files
 *.ctxt

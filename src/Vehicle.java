@@ -65,23 +65,39 @@ public class Vehicle implements Runnable {
         System.out.println("Vehicle " + id + " initialised at position " + this.position);
     } 
 
+    public boolean hasSegmentChanged(double oldPosition, double newPosition) {
+        int oldSegmentId = (int) (oldPosition / Config.SEGMENT_LENGTH);
+        int newSegmentId = (int) (newPosition / Config.SEGMENT_LENGTH);
+        return oldSegmentId != newSegmentId;
+    }                   
+
     public void updatePosition() {
+        double newPosition = position + direction * speed * (currentTime- lastUpdated);
+        if (newPosition > Config.ROAD_END) newPosition = Config.ROAD_START;
+        else if (newPosition < Config.ROAD_START) newPosition = Config.ROAD_END;
+        if (hasSegmentChanged(position, newPosition)) {
+            clouds.forEach((appId, cloud) -> {
+                if (cloud.isMember(id)) {
+                    transmitQueue.add(
+                        new Packet(simulatorRef, Config.PACKET_TYPE.RLEAVE, id, currentTime, appId)
+                    );
+                }
+            });
+            clouds.clear();
+        }
+        position = newPosition;
+
+        Random random = new Random();
+        double speedChange = random.nextDouble() * 10;
+        Boolean accelerate = random.nextBoolean();
+        if (accelerate && (speed + speedChange) < Config.VEHICLE_SPEED_MAX) {
+            speed += speedChange;
+        }
+        if (!accelerate && (speed - speedChange) > Config.VEHICLE_SPEED_MIN) {
+            speed -= speedChange;
+        }
+        this.lastUpdated = currentTime;  
         return;
-        // position += direction * speed * (currentTime- lastUpdated);
-        // if (position > Config.ROAD_END) position = Config.ROAD_START;
-        // else if (position < Config.ROAD_START) position = Config.ROAD_END;
-        
-        // Random random = new Random();
-        // double speedChange = random.nextDouble() * 10;
-        // Boolean accelerate = random.nextBoolean();
-        // if (accelerate && (speed + speedChange) < Config.VEHICLE_SPEED_MAX) {
-        //     speed += speedChange;
-        // }
-        // if (!accelerate && (speed - speedChange) > Config.VEHICLE_SPEED_MIN) {
-        //     speed -= speedChange;
-        // }
-        // this.lastUpdated = currentTime;  
-        // return;
     }
 
     public void handleRREQ(Packet p) {
@@ -110,7 +126,7 @@ public class Vehicle implements Runnable {
             cloud.workingMemberCount = cloud.members.size();
             Packet pstartPacket = new Packet(simulatorRef, Config.PACKET_TYPE.PSTART, id, currentTime, cloud.appId, cloud);
             transmitQueue.add(pstartPacket);
-            handlePSTART(pstartPacket);
+            handlePSTART(pstartPacket); // honor self-contribution
         }
     }
     
@@ -142,8 +158,22 @@ public class Vehicle implements Runnable {
         }
     }
 
+    public void handleRLEAVE(Packet packet) {
+        /*
+        // Case I: Leader leaves
+        if (this.id == nextLeader) {
+            cloud.currentLeader = this.id;        
+        }
+        
+        // Case II: Member leaves
+        if (this.id == currentLeader) {
+
+        }    
+        */
+    }
+
     public Boolean isCloudLeader(Cloud cloud) {
-        return cloud != null && cloud.requestorId == id;  
+        return cloud != null && cloud.currentLeaderId == id;  
     }
 
     public int getDonatedResources() {
@@ -155,47 +185,39 @@ public class Vehicle implements Runnable {
         while (currentTime <= stopTime) {
             // System.out.println("Vehicle " + id + " starting interval " + currentTime);
             updatePosition();
-
-            // Attempt to transmit packets in transmitQueue
             Channel targetChannel = mediumRef.channels[channelId];
-            // if (targetChannel.isFree(id, position)) {
-            //     while (!transmitQueue.isEmpty()) {
-            //         Packet packet = transmitQueue.poll();
-            //         targetChannel.transmitPacket(packet, currentTime, position);
-            //     }        
-            //     targetChannel.stopTransmit(id);
-            //     // Reset contention window
-            //     contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
-            // }
-            if (backoffTime == 0) {
-                if (targetChannel.isFree(id, position)) {
-                    while (!transmitQueue.isEmpty()) {
-                        Packet packet = transmitQueue.poll();
-                        targetChannel.transmitPacket(packet, currentTime, position);
-                    }        
-                    targetChannel.stopTransmit(id);
-                    // Reset contention window
-                    contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
-                }
-                else {
-                    contentionWindowSize *= 2;
-                    if (contentionWindowSize > Config.CONTENTION_WINDOW_MAX) {
-                        System.out.println("Vehicle could not transmit in backoff, retrying again");
-                        backoffTime = 0;
+
+            // Attempt to transmit packets in transmitQueue only if there are any pending packets
+            if (!transmitQueue.isEmpty()) {
+                if (backoffTime == 0) {
+                    if (targetChannel.isFree(id, position)) {
+                        while (!transmitQueue.isEmpty()) {
+                            Packet packet = transmitQueue.poll();
+                            targetChannel.transmitPacket(packet, currentTime, position);
+                        }        
+                        targetChannel.stopTransmit(id);
+                        // Reset contention window
                         contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
                     }
                     else {
-                        backoffTime = ThreadLocalRandom.current().nextInt(contentionWindowSize) + 1;
+                        contentionWindowSize *= 2;
+                        if (contentionWindowSize > Config.CONTENTION_WINDOW_MAX) {
+                            System.out.println("Vehicle could not transmit in backoff, retrying again");
+                            backoffTime = 0;
+                            contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
+                        }
+                        else {
+                            backoffTime = ThreadLocalRandom.current().nextInt(contentionWindowSize) + 1;
+                        }
                     }
                 }
-            }
-            else {
-                if (targetChannel.isFree(id, position)) {
-                    backoffTime--;
-                    targetChannel.stopTransmit(id);
+                else {
+                    if (targetChannel.isFree(id, position)) {
+                        backoffTime--;
+                        targetChannel.stopTransmit(id);
+                    }
                 }
-            }
-            
+            }            
             // Put processed work done (if any) to receiveQueue
             while (!processQueue.isEmpty()) {
                 ProcessBlock nextBlock = processQueue.peek();
@@ -253,6 +275,9 @@ public class Vehicle implements Runnable {
                         break;
                     case PDONE:
                         handlePDONE(p);
+                        break;
+                    case RLEAVE:
+                        handleRLEAVE(p);
                         break;
                     default:
                         System.out.println("Unhandled packet type " + p.type);
