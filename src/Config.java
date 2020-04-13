@@ -1,8 +1,11 @@
 public class Config {
     static double ROAD_END = 30500.0; // m
     static double ROAD_START = 0.0;
-    static double VEHICLE_SPEED_MIN = 8.33; // m/s
-    static double VEHICLE_SPEED_MAX = 25.0; // m/s
+
+    static double VEHICLE_SPEED_MIN = 0; // m/s
+    static double VEHICLE_SPEED_MAX = 27.78; // m/s
+    static double VEHICLE_SPEED_STD_DEV = 10.0;
+
     static double SEGMENT_LENGTH = 610;
     static double TRANSMISSION_RANGE = 300;
     static enum PACKET_TYPE {

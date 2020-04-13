@@ -6,6 +6,7 @@ public class Vehicle implements Runnable {
     int id;
     double position;
     double speed;
+    double averageSpeed;
     int direction;
     int lastUpdated;
     int currentTime;
@@ -39,12 +40,12 @@ public class Vehicle implements Runnable {
     int bookedTillTime;
     Queue<ProcessBlock> processQueue;
 
-    public Vehicle(int id, Phaser timeSync, Simulator simulatorRef, Medium mediumRef, int stopTime) {
-        this.id = id;
-        Random random = new Random();
-        this.position = random.nextDouble() * Config.ROAD_END;
-        this.speed = Config.VEHICLE_SPEED_MIN + random.nextDouble() * (Config.VEHICLE_SPEED_MAX - Config.VEHICLE_SPEED_MIN);
-        this.direction = random.nextInt(2);
+    public Vehicle(int id, Phaser timeSync, Simulator simulatorRef, Medium mediumRef, int stopTime, double averageSpeed) {
+        this.id = id;        
+        this.position = ThreadLocalRandom.current().nextDouble() * Config.ROAD_END;
+        this.averageSpeed = averageSpeed;
+        this.speed = averageSpeed;
+        this.direction = ThreadLocalRandom.current().nextInt(2);
         this.lastUpdated = 0;
         this.currentTime = 0;
         this.stopTime = stopTime;
@@ -83,6 +84,8 @@ public class Vehicle implements Runnable {
         double newPosition = position + direction * speed * (currentTime- lastUpdated);
         if (newPosition > Config.ROAD_END) newPosition = Config.ROAD_START;
         else if (newPosition < Config.ROAD_START) newPosition = Config.ROAD_END;
+        
+        // Send out RLEAVE's if vehicle is inside a new segment
         if (hasSegmentChanged(position, newPosition)) {
             clouds.forEach((appId, cloud) -> {
                 if (cloud != null && cloud.isMember(id)) {
@@ -98,16 +101,13 @@ public class Vehicle implements Runnable {
         }
         position = newPosition;
 
-        Random random = new Random();
-        double speedChange = random.nextDouble() * 10;
-        Boolean accelerate = random.nextBoolean();
-        if (accelerate && (speed + speedChange) < Config.VEHICLE_SPEED_MAX) {
-            speed += speedChange;
-        }
-        if (!accelerate && (speed - speedChange) > Config.VEHICLE_SPEED_MIN) {
-            speed -= speedChange;
-        }
-        this.lastUpdated = currentTime;  
+        double newSpeed;
+        do {
+            newSpeed = ThreadLocalRandom.current().nextGaussian();
+            newSpeed = newSpeed * Config.VEHICLE_SPEED_STD_DEV + averageSpeed;
+        } while (speed < Config.VEHICLE_SPEED_MIN || speed > Config.VEHICLE_SPEED_MAX);
+        speed = newSpeed;
+        lastUpdated = currentTime;
         return;
     }
 

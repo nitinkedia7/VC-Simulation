@@ -7,6 +7,7 @@ public class Simulator implements Runnable {
     int currentTime;
     int stopTime;
     int totalVehicleCount;
+    double averageVehicleSpeed;
     ArrayList<Vehicle> vehicles;
     ArrayList<RoadSideUnit> roadSideUnits;
     Medium medium;
@@ -46,10 +47,11 @@ public class Simulator implements Runnable {
     int leaderChangeCount;
     int leaderLeaveCount;
 
-    public Simulator(int givenVehicleCount) {
+    public Simulator(int givenVehicleCount, double givenAverageSpeed) {
         currentTime = 0;
         stopTime = Config.STOP_TIME;
         totalVehicleCount = givenVehicleCount;
+        averageVehicleSpeed = givenAverageSpeed;
         timeSync = new Phaser();
         timeSync.register();
         medium = new Medium();
