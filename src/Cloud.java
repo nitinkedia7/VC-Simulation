@@ -28,12 +28,24 @@ public class Cloud {
 
     class Leader {
         int vehicleId;
+        double speed;
+        double LQI;
 
-        public Leader(int vehicleId) {
+        public Leader(int vehicleId, double speed) {
             this.vehicleId = vehicleId;
+            this.speed = speed;
+            this.LQI = 0;
         }
     }
     List<Leader> futureLeaders;
+
+    class SortByLQI implements Comparator<Leader> {
+        public int compare(Leader x, Leader y) {
+            if (x.LQI < y.LQI) return 1;
+            else if (x.LQI == y.LQI) return 0;
+            return -1;    
+        }
+    }
 
     public Cloud(Simulator simulatorRef, Packet packet) {
         this.appId = packet.appId;
@@ -112,7 +124,7 @@ public class Cloud {
                 return;
             }
         }
-        futureLeaders.add(new Leader(packet.senderId));
+        futureLeaders.add(new Leader(packet.senderId, packet.velocity));
     }
 
     public Map<Integer, Integer> reassignWork(int id) {
@@ -182,7 +194,12 @@ public class Cloud {
     }
 
     public void electLeader() {
-        // TODO: LQI, currently the requestor is the leader
+        for (Leader potentiaLeader1 : futureLeaders) {
+            for (Leader potentialLeader2 : futureLeaders) {
+                potentiaLeader1.LQI += Math.abs(potentiaLeader1.speed - potentialLeader2.speed); 
+            }
+        }
+        Collections.sort(futureLeaders, new SortByLQI());
         currentLeaderId = futureLeaders.get(0).vehicleId;
         futureLeaders.remove(0);
         return;

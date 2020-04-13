@@ -6,6 +6,7 @@ import java.io.*;
 public class Simulator implements Runnable {
     int currentTime;
     int stopTime;
+    int vehiclesPerSegment;
     int totalVehicleCount;
     double averageVehicleSpeed;
     ArrayList<Vehicle> vehicles;
@@ -13,6 +14,7 @@ public class Simulator implements Runnable {
     Medium medium;
     Phaser timeSync;
     DecimalFormat decimalFormat;
+    FileWriter csvFileWriter;
 
     public class PacketStat {
         Config.PACKET_TYPE type;
@@ -47,16 +49,19 @@ public class Simulator implements Runnable {
     int leaderChangeCount;
     int leaderLeaveCount;
 
-    public Simulator(int givenVehicleCount, double givenAverageSpeed) {
+    public Simulator(int givenVehiclePerSegment, double givenAverageVehicleSpeed, FileWriter fw) {
         currentTime = 0;
         stopTime = Config.STOP_TIME;
-        totalVehicleCount = givenVehicleCount;
-        averageVehicleSpeed = givenAverageSpeed;
+        int segmentCount = (int) Math.ceil(Config.ROAD_END / Config.SEGMENT_LENGTH);
+        totalVehicleCount = givenVehiclePerSegment * segmentCount;
+        vehiclesPerSegment = givenVehiclePerSegment;
+        averageVehicleSpeed = givenAverageVehicleSpeed;
         timeSync = new Phaser();
         timeSync.register();
         medium = new Medium();
         decimalFormat = new DecimalFormat();
         decimalFormat.setMaximumFractionDigits(3);
+        csvFileWriter = fw;
 
         packetStats = new HashMap<Config.PACKET_TYPE, PacketStat>();
         for (Config.PACKET_TYPE type : Config.PACKET_TYPE.values()) {
@@ -70,7 +75,8 @@ public class Simulator implements Runnable {
         // Spawn vehicles at random positions
         vehicles  = new ArrayList<Vehicle>();
         for (int i = 1; i <= totalVehicleCount; i++) {
-            vehicles.add(new Vehicle(i, timeSync, this, medium, stopTime));
+            // givenAverageVehicleSpeed * 0.277 is to convert km/h to m/s
+            vehicles.add(new Vehicle(i, timeSync, this, medium, stopTime, givenAverageVehicleSpeed * 0.277));
         }
 
         // Spawn RSU's in the mid of each (implicit) segment
@@ -146,21 +152,24 @@ public class Simulator implements Runnable {
         System.out.println("Leader change count = " +leaderChangeCount);
         System.out.println("Leader leave count = " +leaderLeaveCount);
 
-        try {
-            FileWriter fw = new FileWriter(Config.OUTPUT_FILENAME, true);
-            fw.write(totalVehicleCount + "," + decimalFormat.format(averageClusterOverhead) + "," + decimalFormat.format(averageCloudFormationTime) + "," + leaderChangeCount +"\n");
-            fw.close();
-        } catch (IOException ioe) {
-            System.err.println("IOException: " + ioe.getMessage());
-        }
+        String csvRow = String.format(
+            "%d,%d,%d,%s,%s,%d\n",
+            vehiclesPerSegment,
+            totalVehicleCount,
+            averageVehicleSpeed,
+            decimalFormat.format(averageClusterOverhead),
+            decimalFormat.format(averageCloudFormationTime),
+            leaderChangeCount
+        );
+        csvFileWriter.write(csvRow);
     }
 
     public void run() {
-        for (Vehicle v : vehicles) {
-            new Thread(v).start();
-        }
         for (RoadSideUnit rsu : roadSideUnits) {
             new Thread(rsu).start();
+        }
+        for (Vehicle v : vehicles) {
+            new Thread(v).start();
         }
         while (currentTime <= stopTime) {
             System.out.println("Interval " + currentTime);
@@ -175,21 +184,69 @@ public class Simulator implements Runnable {
         System.out.println("Simulation stopped after " + stopTime + " ms");
     }
 
-    public static void main(String[] args) {
-        try {
-            FileWriter fw = new FileWriter(Config.OUTPUT_FILENAME, true);
-            fw.write("Number of Vehicles,Average Cluster Overhead,Average Cloud Formation Time,Leader Change Count\n");
-            fw.close();
-        } catch (IOException ioe) {
-            System.err.println("IOException: " + ioe.getMessage());
-        }
+    // public static void main(String[] args) {
+    //     try {
+    //         FileWriter fw = new FileWriter(Config.OUTPUT_FILENAME, true);
+    //         fw.write("Number of Vehicles,Average Cluster Overhead,Average Cloud Formation Time,Leader Change Count\n");
+    //         fw.close();
+    //     } catch (IOException ioe) {
+    //         System.err.println("IOException: " + ioe.getMessage());
+    //     }
 
-        int segmentCount = (int) Math.ceil(Config.ROAD_END / Config.SEGMENT_LENGTH);
-        for (int vehiclesPerSegment = 40; vehiclesPerSegment <= 40; vehiclesPerSegment += 4) {
-            int totalVehicleCount = vehiclesPerSegment * segmentCount;
-            Simulator simulator = new Simulator(totalVehicleCount);
-            simulator.run();
-            simulator.printStatistics();
+    //     int segmentCount = (int) Math.ceil(Config.ROAD_END / Config.SEGMENT_LENGTH);
+    //     for (int vehiclesPerSegment = 40; vehiclesPerSegment <= 40; vehiclesPerSegment += 4) {
+    //         int totalVehicleCount = vehiclesPerSegment * segmentCount;
+    //         Simulator simulator = new Simulator(totalVehicleCount);
+    //         simulator.run();
+    //         simulator.printStatistics();
+    //     }
+    // }
+
+        public static void main(String[] args) {
+            String logDirectoryPath = Config.LOG_PATH + System.currentTimeMillis();
+            new File(logDirectoryPath).mkdirs();    
+
+            PrintStream console = System.out;
+            FileWriter fw = new FileWriter(logDirectoryPath + "/plot.csv", true);
+            fw.write("Average Vehicle Density,Number of Vehicles,Average Vehicle Speed,Average Cluster Overhead,Average Cloud Formation Time,Leader Change Count\n");
+
+            int avgVehicleSpeedKMPH = 60;
+            for (int vehiclesPerSegment = 4; vehiclesPerSegment <= 40; vehiclesPerSegment += 4) {
+                try {
+                    String logFilePath = String.format("%s/%d_%d.log", logDirectoryPath, vehiclesPerSegment, avgVehicleSpeedKMPH);
+                    PrintStream logFile = new PrintStream(new File(logFilePath));
+                    System.setOut(logFile);
+                    
+                    Simulator simulator = new Simulator(vehiclesPerSegment, avgVehicleSpeedKMPH * 0.2777, fw);
+                    simulator.run();
+                    simulator.printStatistics();
+                } catch (Exception e) {
+                    System.err.printf(
+                        "Simulation with density %d and average speed %d failed.\n", vehiclesPerSegment, avgVehicleSpeedKMPH
+                    );
+                    e.printStackTrace(System.err);
+                }
+            }
+            fw.close();
+
+            fw = new FileWriter(logDirectoryPath + "/plot_speed.csv", true);
+            int averageVehiclePerSegment = 24;
+            for (int vehicleSpeedKMPH = 30; vehicleSpeedKMPH <= 80; vehicleSpeedKMPH += 10) {
+                try {
+                    String logFilePath = String.format("%s/%d_%d_speed.log", logDirectoryPath, averageVehiclePerSegment, avgVehicleSpeedKMPH);
+                    PrintStream logFile = new PrintStream(new File(logFilePath));
+                    System.setOut(logFile);
+                    
+                    Simulator simulator = new Simulator(averageVehiclePerSegment * segmentCount, avgVehicleSpeedKMPH * 0.2777, fw);
+                    simulator.run();
+                    simulator.printStatistics();
+                } catch (Exception e) {
+                    System.err.printf(
+                        "Simulation with density %d and average speed %d failed.\n", averageVehiclePerSegment, avgVehicleSpeedKMPH
+                    );
+                    e.printStackTrace(System.err);
+                }    
+            }
+            fw.close();
         }
-    }
 }

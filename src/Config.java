@@ -26,5 +26,6 @@ public class Config {
     static int TOTAL_CHANNEL_COUNT = 5;
     static int CONTENTION_WINDOW_BASE = 1;
     static int CONTENTION_WINDOW_MAX = 1024;
-    static String OUTPUT_FILENAME = "../output/output.txt"; 
+    static String LOG_PATH = "../logs/";
+    // static String OUTPUT_FILENAME = "../output/output.txt"; 
 }
