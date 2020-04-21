@@ -28,6 +28,7 @@ public class Vehicle implements Runnable {
         int workAmount;
 
         public ProcessBlock(int appId, int donatedResources) {
+            // System.out.println(id + " has got " + donatedResources + " work");
             if (currentTime > bookedTillTime) {
                 bookedTillTime = currentTime;
             }
@@ -46,6 +47,7 @@ public class Vehicle implements Runnable {
         this.averageSpeed = averageSpeed;
         this.speed = averageSpeed;
         this.direction = ThreadLocalRandom.current().nextInt(2);
+        if (this.direction == 0) this.direction = -1; 
         this.lastUpdated = 0;
         this.currentTime = 0;
         this.stopTime = stopTime;
@@ -82,8 +84,14 @@ public class Vehicle implements Runnable {
 
     public void updatePosition() {
         double newPosition = position + direction * speed * (currentTime- lastUpdated);
-        if (newPosition > Config.ROAD_END) newPosition = Config.ROAD_START;
-        else if (newPosition < Config.ROAD_START) newPosition = Config.ROAD_END;
+        if (newPosition > Config.ROAD_END) {
+            newPosition = Config.ROAD_END;
+            direction = -1;
+        }
+        else if (newPosition < Config.ROAD_START) {
+            newPosition = Config.ROAD_START;
+            direction = 1;
+        }
         
         // Send out RLEAVE's if vehicle is inside a new segment
         if (hasSegmentChanged(position, newPosition)) {
@@ -105,7 +113,7 @@ public class Vehicle implements Runnable {
         do {
             newSpeed = ThreadLocalRandom.current().nextGaussian();
             newSpeed = newSpeed * Config.VEHICLE_SPEED_STD_DEV + averageSpeed;
-        } while (speed < Config.VEHICLE_SPEED_MIN || speed > Config.VEHICLE_SPEED_MAX);
+        } while (newSpeed < Config.VEHICLE_SPEED_MIN || newSpeed > Config.VEHICLE_SPEED_MAX);
         speed = newSpeed;
         lastUpdated = currentTime;
         return;
@@ -159,7 +167,7 @@ public class Vehicle implements Runnable {
             }
             else {
                 transmitQueue.add(new Packet(simulatorRef, Config.PACKET_TYPE.RTEAR, id, currentTime, donePacket.appId));
-                cloud.printStats(false);
+                cloud.printStats("deleted");
                 clouds.remove(donePacket.appId);
             }
         }
@@ -220,11 +228,14 @@ public class Vehicle implements Runnable {
                     }
                 }
             }            
-            // Put processed work done (if any) to receiveQueue
+            // Put processed work done (if any) to transmitQueue
             while (!processQueue.isEmpty()) {
                 ProcessBlock nextBlock = processQueue.peek();
                 if (currentTime >= nextBlock.completionTime) {
-                    transmitQueue.add(new Packet(simulatorRef, Config.PACKET_TYPE.PDONE, id, currentTime, nextBlock.appId, nextBlock.workAmount));
+                    // System.out.println(id + " has completed " + nextBlock.workAmount + " work at " + nextBlock.completionTime);
+                    Packet p = new Packet(simulatorRef, Config.PACKET_TYPE.PDONE, id, currentTime, nextBlock.appId, nextBlock.workAmount);
+                    handlePDONE(p);
+                    transmitQueue.add(p);
                     processQueue.remove();
                 }
                 else {

@@ -52,7 +52,7 @@ public class RoadSideUnit implements Runnable {
             return;
         }
         // Initialise a new cloud with 1 member
-        clouds.put(appId, new Cloud(simulatorRef, reqPacket));
+        clouds.put(appId, new Cloud(simulatorRef, reqPacket, id));
     }
 
     public void handleRREP(Packet donorPacket) {
@@ -61,8 +61,11 @@ public class RoadSideUnit implements Runnable {
             System.out.println("No cloud present for app " + donorPacket.appId);
             return;
         }
+        if (!cloud.isCloudLeader(id)) {
+            return;
+        }
         cloud.addMember(donorPacket);
-        if (!cloud.hasFormed && cloud.metResourceQuota()) {
+        if (cloud.metResourceQuota()) {
             cloud.electLeader();
             cloud.recordCloudFormed(currentTime);
             transmitQueue.add(new Packet(simulatorRef, Config.PACKET_TYPE.RACK, id, currentTime, donorPacket.appId, cloud));

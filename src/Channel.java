@@ -30,7 +30,9 @@ public class Channel {
     public boolean isFree(int id, double position) {
         transmitterPositionsLock.lock();
         for (Transmitter t : transmitterPositions) {
-            if (Math.abs(position - t.position) <= Config.TRANSMISSION_RANGE) {
+            int segment1 = (int) (position / Config.SEGMENT_LENGTH);
+            int segment2 = (int) (t.position / Config.SEGMENT_LENGTH);
+            if (Math.abs(segment1 - segment2) <= 1) {
                 transmitterPositionsLock.unlock();
                 return false;        
             }
@@ -64,7 +66,13 @@ public class Channel {
         int newPacketCount = packetQueue.size() - readTillIndex;
         while (readTillIndex < packetQueue.size()) {
             Packet packet = packetQueue.get(readTillIndex);
-            if (packet.senderId != receiverId && Math.abs(position - packet.position) <= Config.TRANSMISSION_RANGE) {
+
+            int segment1 = (int) (position / Config.SEGMENT_LENGTH);
+            int segment2 = (int) (packet.position / Config.SEGMENT_LENGTH);
+            int diff = 0;
+            if (packet.type == Config.PACKET_TYPE.RLEAVE) diff = 1;
+
+            if (packet.senderId != receiverId && Math.abs(segment1 - segment2) <= diff) {
                 receiveQueue.add(packet);
                 packet.recordReception(currentTime);
             }
