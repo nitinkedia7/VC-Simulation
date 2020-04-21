@@ -37,22 +37,15 @@ public class RoadSideUnit implements Runnable {
         // System.out.println("RSU     " + id + " initialised at position " + this.position);
     }
 
-    public void handleRJOIN(Packet joinPacket) {
-        Cloud cloud = clouds.get(joinPacket.appId);
-        if (cloud != null && cloud.isCloudLeader(id)) {
-            cloud.addRJOINPacket(joinPacket);
-        }
-    }
-
     public void handleRREQ(Packet reqPacket) {
-        int appId = reqPacket.appId;
-        if (clouds.containsKey(appId)) {
-            // TODO: handle simultaneous RREQ requests
-            // Currently, if RREQ's collide, only the first survives
-            return;
+        Cloud cloud = clouds.get(reqPacket.appId);
+        if (cloud == null) { // RSU starts making a cloud
+            clouds.put(reqPacket.appId, new Cloud(simulatorRef, reqPacket.appId, id));
+            clouds.get(reqPacket.appId).addRequestor(reqPacket);
         }
-        // Initialise a new cloud with 1 member
-        clouds.put(appId, new Cloud(simulatorRef, reqPacket, id));
+        else if (cloud.isCloudLeader(id)) {
+            cloud.queueRequestPacket(reqPacket);
+        }
     }
 
     public void handleRREP(Packet donorPacket) {
@@ -67,7 +60,6 @@ public class RoadSideUnit implements Runnable {
         cloud.addMember(donorPacket);
         if (cloud.metResourceQuota()) {
             cloud.electLeader();
-            cloud.recordCloudFormed(currentTime);
             transmitQueue.add(new Packet(simulatorRef, Config.PACKET_TYPE.RACK, id, currentTime, donorPacket.appId, cloud));
         }
     }
@@ -123,9 +115,6 @@ public class RoadSideUnit implements Runnable {
                         break;
                     case RREP:
                         handleRREP(p);
-                        break;
-                    case RJOIN:
-                        handleRJOIN(p);
                         break;
                     case RACK:
                         // RSU sends RACK, not process it

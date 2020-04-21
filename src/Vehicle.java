@@ -73,17 +73,9 @@ public class Vehicle implements Runnable {
         int newSegmentId = (int) (newPosition / Config.SEGMENT_LENGTH);
         return oldSegmentId != newSegmentId;
     }
-    
-    // public boolean almostInNewSegment(double position) {
-    //     int segmentId = (int) (position / Config.SEGMENT_LENGTH);
-    //     double segmentEnd = (segmentId + 1) * Config.SEGMENT_LENGTH;
-    //     if ((segmentEnd - position) / Config.SEGMENT_LENGTH > 0.9) {
-    //         return true;
-    //     }
-    // }
 
     public void updatePosition() {
-        double newPosition = position + direction * speed * (currentTime- lastUpdated);
+        double newPosition = position + (direction * speed * (currentTime - lastUpdated)) / 1000;
         if (newPosition > Config.ROAD_END) {
             newPosition = Config.ROAD_END;
             direction = -1;
@@ -120,25 +112,30 @@ public class Vehicle implements Runnable {
     }
 
     public void handleRREQ(Packet p) {
-        // Send a RREP in reply
-        transmitQueue.add(new Packet(simulatorRef, Config.PACKET_TYPE.RREP, id, currentTime, direction * speed, p.appId));
+        if (p.senderId == id) {
+            Cloud cloud = clouds.get(p.appId);
+            if (cloud != null && cloud.isCloudLeader(id)) {
+                cloud.queueRequestPacket(p);
+            }
+        } 
+        else {
+            transmitQueue.add(new Packet(simulatorRef, Config.PACKET_TYPE.RREP, id, currentTime, direction * speed, p.appId));
+        }
     }
 
-    public void handleRJOIN(Packet joinPacket) {
-        Cloud cloud = clouds.get(joinPacket.appId);
-        if (cloud != null && cloud.isCloudLeader(id)) {
-            cloud.addRJOINPacket(joinPacket);
-        }
-        else {
-            // do nothing, cloud leader will redistribute the work
-        }
-    }
+    public void handleRREP(Packet donorPacket) {
+        Cloud cloud = clouds.get(donorPacket.appId);
+        if (cloud == null || !cloud.isCloudLeader(id)) return;
+        cloud.addMember(donorPacket);
+    }   
 
     public void handleRACK(Packet ackPacket) {
         // Save this cloud
         Cloud cloud = ackPacket.cloud;
         clouds.put(ackPacket.appId, cloud);
         if (cloud != null && cloud.isCloudLeader(id)) {
+            cloud.assignWork();
+            cloud.recordCloudFormed(currentTime, "formed");
             Packet pstartPacket = new Packet(simulatorRef, Config.PACKET_TYPE.PSTART, id, currentTime, cloud.appId, cloud.getWorkAssignment());
             transmitQueue.add(pstartPacket);
             handlePSTART(pstartPacket); // honor self-contribution
@@ -149,6 +146,7 @@ public class Vehicle implements Runnable {
         // Add an alarm for contribution
         int assignedWork = startPacket.workAssignment.getOrDefault(id, 0);
         if (assignedWork > 0) {
+            // System.out.println(id + " receives " + assignedWork + " work for appId " + startPacket.appId);
             processQueue.add(new ProcessBlock(startPacket.appId, assignedWork));
         }
         return;
@@ -157,10 +155,10 @@ public class Vehicle implements Runnable {
     public void handlePDONE(Packet donePacket) {
         Cloud cloud = clouds.get(donePacket.appId);
         if (cloud == null || !cloud.isCloudLeader(id)) return;
-
         cloud.markAsDone(donePacket.senderId, donePacket.workDoneAmount);
-        if (cloud.workingMemberCount == 0) {
-            if (cloud.processPendingRJOIN(currentTime)) {
+        if (cloud.workFinished()) {
+            System.out.println("Work finished for appId " + cloud.appId);
+            if (cloud.processPendingRequest(currentTime)) {
                 Packet pstartPacket = new Packet(simulatorRef, Config.PACKET_TYPE.PSTART, id, currentTime, cloud.appId, cloud.getWorkAssignment());
                 transmitQueue.add(pstartPacket);
                 handlePSTART(pstartPacket);
@@ -194,7 +192,7 @@ public class Vehicle implements Runnable {
     public void run() {
         while (currentTime <= stopTime) {
             // System.out.println("Vehicle " + id + " starting interval " + currentTime);
-            updatePosition();
+            if (currentTime % 50 == 0) updatePosition();
             Channel targetChannel = mediumRef.channels[channelId];
 
             // Attempt to transmit packets in transmitQueue only if there are any pending packets
@@ -232,7 +230,7 @@ public class Vehicle implements Runnable {
             while (!processQueue.isEmpty()) {
                 ProcessBlock nextBlock = processQueue.peek();
                 if (currentTime >= nextBlock.completionTime) {
-                    // System.out.println(id + " has completed " + nextBlock.workAmount + " work at " + nextBlock.completionTime);
+                    // System.out.println(id + " completed " + nextBlock.workAmount + " work at " + nextBlock.completionTime);
                     Packet p = new Packet(simulatorRef, Config.PACKET_TYPE.PDONE, id, currentTime, nextBlock.appId, nextBlock.workAmount);
                     handlePDONE(p);
                     transmitQueue.add(p);
@@ -247,18 +245,11 @@ public class Vehicle implements Runnable {
             int hasRequest = ThreadLocalRandom.current().nextInt(Config.INV_RREQ_PROB);
             if (hasRequest == 1) {
                 int appType = ThreadLocalRandom.current().nextInt(Config.APPLICATION_TYPE_COUNT);
-                if (clouds.getOrDefault(appType, null) != null) { // RJOIN
-                    Packet pendingPacket = 
-                        new Packet(simulatorRef, Config.PACKET_TYPE.RJOIN, id, currentTime, speed * direction, appType, Config.MAX_RESOURCE_QUOTA);
-                    transmitQueue.add(pendingPacket);
-                    handleRJOIN(pendingPacket);
-                } 
-                else { // RREQ
-                    transmitQueue.add(
-                        new Packet(simulatorRef, Config.PACKET_TYPE.RREQ, id, currentTime, speed * direction, appType, Config.MAX_RESOURCE_QUOTA)
-                    );
-                }
+                Packet requestPacket = new Packet(simulatorRef, Config.PACKET_TYPE.RREQ, id, currentTime, speed * direction, appType, Config.MAX_RESOURCE_QUOTA); 
+                transmitQueue.add(requestPacket);
+                handleRREQ(requestPacket);
             }
+
             // Also get and process receivedPackets
             int newPacketCount = targetChannel.receivePackets(id, readTillIndex, currentTime, position, receiveQueue); 
             readTillIndex += newPacketCount;
@@ -271,11 +262,8 @@ public class Vehicle implements Runnable {
                     case RREQ:
                         handleRREQ(p);
                         break;
-                    case RJOIN:
-                        handleRJOIN(p);
-                        break;
                     case RREP:
-                        // Currently only RSU handles RREP's
+                        handleRREP(p);
                         break;
                     case RACK:
                         handleRACK(p);

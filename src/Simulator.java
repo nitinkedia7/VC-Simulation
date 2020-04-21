@@ -46,8 +46,10 @@ public class Simulator implements Runnable {
     Map<Config.PACKET_TYPE, PacketStat> packetStats;
     int totalCloudsFormed;
     int totalCloudsFormationTime;
+    int leaderAlgoInvoked;
     int leaderChangeCount;
     int leaderLeaveCount;
+
 
     public Simulator(int givenVehiclePerSegment, int givenAverageVehicleSpeed, FileWriter fw) {
         currentTime = 0;
@@ -72,6 +74,7 @@ public class Simulator implements Runnable {
         totalCloudsFormationTime = 0;
         leaderChangeCount = 0;
         leaderLeaveCount = 0;
+        leaderAlgoInvoked = 0;
         // Spawn vehicles at random positions
         vehicles  = new ArrayList<Vehicle>();
         for (int i = 1; i <= totalVehicleCount; i++) {
@@ -120,6 +123,10 @@ public class Simulator implements Runnable {
         leaderLeaveCount++;
     }
 
+    public synchronized void incrLeaderAlgoInvokedCount() {
+        leaderAlgoInvoked++;
+    }
+
     public void printStatistics() {
         int totalGeneratedCount = 0;
         int totalTransmittedCount = 0;
@@ -143,24 +150,25 @@ public class Simulator implements Runnable {
         System.out.println("Average transmit time in ms = " + decimalFormat.format(((double) totalTransmitTime) / totalTransmittedCount));
         System.out.println("Average receive time in ms = " + decimalFormat.format(((double) totalReceiveTime) / totalReceivedCount));
     
-        int totalAppRequests = packetStats.get(Config.PACKET_TYPE.RREQ).transmittedCount + packetStats.get(Config.PACKET_TYPE.RJOIN).transmittedCount;
-        double averageClusterOverhead = ((double) totalTransmittedCount) / totalAppRequests;
+        double averageClusterOverhead = ((double) totalTransmittedCount) / totalCloudsFormed;
         double averageCloudFormationTime = ((double) totalCloudsFormationTime) / totalCloudsFormed;
         System.out.println();
         System.out.println("Average cluster overhead = " + decimalFormat.format(averageClusterOverhead));
         System.out.println("Average cloud formation time in ms = " + decimalFormat.format(averageCloudFormationTime));
         System.out.println("Leader change count = " + leaderChangeCount);
         System.out.println("Leader leave count = " + leaderLeaveCount);
+        System.out.println("Total cloud formed/recyled = " + totalCloudsFormed);
 
         String csvRow = String.format(
-            "%d,%d,%d,%s,%s,%d,%d\n",
+            "%d,%d,%d,%s,%s,%d,%d,%d\n",
             vehiclesPerSegment,
             totalVehicleCount,
             averageVehicleSpeed,
             decimalFormat.format(averageClusterOverhead),
             decimalFormat.format(averageCloudFormationTime),
             leaderChangeCount,
-            leaderLeaveCount
+            leaderLeaveCount,
+            leaderAlgoInvoked
         );
         try {
             csvFileWriter.write(csvRow);
@@ -197,7 +205,7 @@ public class Simulator implements Runnable {
 
             PrintStream console = System.out;
             FileWriter fw = new FileWriter(logDirectoryPath + "/plot.csv", true);
-            fw.write("Average Vehicle Density,Number of Vehicles,Average Vehicle Speed,Average Cluster Overhead,Average Cloud Formation Time,Leader Change Count, Leader Leave Count\n");
+            fw.write("Average Vehicle Density,Number of Vehicles,Average Vehicle Speed,Average Cluster Overhead,Average Cloud Formation Time,Leader Change Count, Leader Leave Count, Leader Algo Invoked\n");
             fw.flush();
 
             int avgVehicleSpeedKMPH = 60;
@@ -219,7 +227,7 @@ public class Simulator implements Runnable {
             }
 
             int averageVehiclePerSegment = 24;
-            for (int vehicleSpeedKMPH = 30; vehicleSpeedKMPH <= 80; vehicleSpeedKMPH += 10) {
+            for (int vehicleSpeedKMPH = 30; vehicleSpeedKMPH <= 90; vehicleSpeedKMPH += 10) {
                 try {
                     String logFilePath = String.format("%s/%d_%d.log", logDirectoryPath, averageVehiclePerSegment, vehicleSpeedKMPH);
                     PrintStream logFile = new PrintStream(new File(logFilePath));

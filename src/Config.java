@@ -9,7 +9,7 @@ public class Config {
     static double SEGMENT_LENGTH = 600;
     static double TRANSMISSION_RANGE = 300;
     static enum PACKET_TYPE {
-        RREQ, RREP, RJOIN, RACK, RTEAR, PSTART, PDONE, RLEAVE;
+        RREQ, RREP, RACK, RTEAR, PSTART, PDONE, RLEAVE;
     }
     static int PACKET_TYPE_COUNT = 8;
     static boolean useFair = true;

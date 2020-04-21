@@ -24,10 +24,10 @@ public class Packet {
         // System.out.println("Packet " + ": Sender " + senderId + " generated " + type + " at " + genTime);
     }
 
-    // Constructor for RREQ, RJOIN
+    // Constructor for RREQ
     public Packet(Simulator simulatorRef, Config.PACKET_TYPE type, int senderId, int genTime, double velocity, int appId, int reqResources) {
         this(simulatorRef, type, senderId, genTime, appId);
-        assert (type == Config.PACKET_TYPE.RREQ || type == Config.PACKET_TYPE.RJOIN) : "Packet constructor type mismatch";
+        assert (type == Config.PACKET_TYPE.RREQ) : "Packet constructor type mismatch";
         this.reqResources = reqResources;
         this.velocity = velocity;
     }

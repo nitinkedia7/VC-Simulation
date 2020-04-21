@@ -5,39 +5,36 @@ public class Cloud {
     int currentLeaderId;
     int requestorId;
     int neededResources;
-    int workingMemberCount;
+    int finishedWork;
     int initialRequestTime;
     int resourceQuotaMetTime;
     Simulator simulatorRef;
-    Queue<Packet> pendingRJOINs;
-
+    Queue<Packet> pendingRequests;
     class Member {
-        int vehicleId;
+        int id;
         int donatedResources;
         Boolean completed;
 
-        public Member(int vehicleId, int donatedResources) {
-            this.vehicleId = vehicleId;
+        public Member(int id, int donatedResources) {
+            this.id = id;
             this.donatedResources = donatedResources;
             this.completed = false;
         }
     }    
-    List<Member> members;
+    List<Member> workingMembers;
     List<Member> idleMembers;
-
     class Leader {
-        int vehicleId;
+        int id;
         double speed;
         double LQI;
 
-        public Leader(int vehicleId, double speed) {
-            this.vehicleId = vehicleId;
+        public Leader(int id, double speed) {
+            this.id = id;
             this.speed = speed;
             this.LQI = 0;
         }
     }
     List<Leader> futureLeaders;
-
     class SortByLQI implements Comparator<Leader> {
         public int compare(Leader x, Leader y) {
             if (x.LQI < y.LQI) return 1;
@@ -46,219 +43,202 @@ public class Cloud {
         }
     }
 
-    public Cloud(Simulator simulatorRef, Packet packet, int parentId) {
-        this.appId = packet.appId;
-        this.requestorId = packet.senderId;
+    public Cloud(Simulator simulatorRef, int appId, int parentId) {
+        this.appId = appId;
         this.currentLeaderId = parentId;
-        this.neededResources = packet.reqResources;
-        this.initialRequestTime = packet.genTime;
-        this.resourceQuotaMetTime = 0;
         this.simulatorRef = simulatorRef;
-        this.pendingRJOINs = new LinkedList<>();
-        this.members = new ArrayList<Member>();
+        this.pendingRequests = new LinkedList<>();
+        this.workingMembers = new ArrayList<Member>();
         this.idleMembers = new ArrayList<Member>();
         this.futureLeaders = new ArrayList<Leader>(); 
-        addMember(packet);
+        return;
     }
 
     public boolean isMember(int id) {
-        for (Member member : members) {
-            if (member.vehicleId == id) return true;
-        } 
+        for (Member member : workingMembers) {
+            if (member.id == id) return true;
+        }
         for (Member member : idleMembers) {
-            if (member.vehicleId == id) return true;
-        }
-        return false;
-    }
-
-    public int findIndex(List<Member> list, int id) {
-        int i = 0;
-        for (Member member : list) {
-            if (member.vehicleId == id) return i;
-            i++;
+            if (member.id == id) return true;
         } 
-        return -1;
-    }
-
-    public boolean remove(List<Member> list, int id) {
-        for (Member member : list) {
-            if (member.vehicleId == id) {
-                list.remove(member);
-                return true;
-            }
-        }
         return false;
     }
-
-    public boolean remove1(List<Leader> list, int id) {
-        for (Leader potentiaLeader : list) {
-            if (potentiaLeader.vehicleId == id) {
-                list.remove(potentiaLeader);
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private synchronized void addIfNotPresent(List<Member> list, Member newMember) {
-        for (Member member : list) {
-            if (member.vehicleId == newMember.vehicleId) {
-                return;
-            }
-        }
-        list.add(newMember);
-        assert(members.size() <= 4);
-    }
-
-    public void addMember(Packet packet) {     
-        int acceptedResources = Math.min(Config.WORK_CHUNK_SIZE, neededResources);
-        if (acceptedResources > 0) {
-            neededResources -= acceptedResources;
-            addIfNotPresent(members, new Member(packet.senderId, acceptedResources));
-        }
-        else {
-            addIfNotPresent(idleMembers, new Member(packet.senderId, Config.WORK_CHUNK_SIZE));
-        }
-        for (Leader potentiaLeader : futureLeaders) {
-            if (potentiaLeader.vehicleId == packet.senderId) {
-                return;
-            }
-        }
-        futureLeaders.add(new Leader(packet.senderId, packet.velocity));
-    }
-
-    public Map<Integer, Integer> reassignWork(int id) {
-        Map<Integer, Integer> workAssignment = new HashMap<Integer, Integer>();
-        
-        int i = findIndex(members, id);
-        if (i != -1) { // working member
-            int reassignAmount = members.get(i).donatedResources;
-            members.remove(i); 
-            if (idleMembers.size() > 0) {
-                workAssignment.put(idleMembers.get(0).vehicleId, reassignAmount);
-                members.add(idleMembers.get(0));
-                idleMembers.remove(0);
-            }   
-            else if (members.size() > 0) {
-                workAssignment.put(members.get(0).vehicleId, reassignAmount);
-                members.get(0).donatedResources += reassignAmount;
-                workingMemberCount -= 1;
-            }
-            else {
-                // No member is available, forfeit the work
-                System.out.println("Reassignment forfeited");
-                workingMemberCount -= 1;
-            }
-        }
-        remove(idleMembers, id);
-        remove1(futureLeaders, id);
-        return workAssignment;
-    }
-
+    
     public boolean isCloudLeader(int id) {
         return currentLeaderId == id;
     }
 
     public boolean isNextLeader(int id) {
-        if (futureLeaders.size() == 0) {
+        if (futureLeaders.size() < 2) {
             System.out.println("No future leader");
         }
-        return futureLeaders.size() != 0 && futureLeaders.get(0).vehicleId == id;
+        return futureLeaders.size() >= 2 && futureLeaders.get(1).id == id;
     }
 
     public void assignNextLeader() {
-        Leader nextLeader = futureLeaders.get(0);
-        this.currentLeaderId = nextLeader.vehicleId;
-        futureLeaders.remove(0);
-    }
-
-    public void markAsDone(int vehicleId, int workDoneAmount) {
-        // System.out.println(vehicleId + " has come to submit " + workDoneAmount + " work, remaining " + workingMemberCount);
-        for (Member member : members) {
-            if (member.vehicleId == vehicleId) {
-                member.donatedResources -= workDoneAmount;
-                if (member.donatedResources == 0) {
-                    member.completed = true;
-                    workingMemberCount -= 1;
-                } 
-                // System.out.println(vehicleId + " has done " + workDoneAmount + " work, remaining " + workingMemberCount);
-                return;
-            }
+        if (futureLeaders.size() < 2) {
+            System.out.println("No future leader can be assigned");
         }
-        System.out.println(vehicleId + " is not a working member of this cloud " + appId);
-    }
-
-    public Boolean metResourceQuota() {
-        return (neededResources <= 0); // returns True is satisfied
-    }
-
-    public Map<Integer, Integer> getWorkAssignment() {
-        Map<Integer, Integer> workAssignment = new HashMap<Integer, Integer>();
-        for (Member member : members) {
-            if (member.donatedResources == 0) {
-                System.out.println("Member " + member.vehicleId + " has 0 donated resources.");
-            }
-            workAssignment.put(member.vehicleId, member.donatedResources);
-        } 
-        return workAssignment;
+        Leader nextLeader = futureLeaders.get(1);
+        this.currentLeaderId = nextLeader.id;
     }
 
     public void electLeader() {
+        simulatorRef.incrLeaderAlgoInvokedCount();
         for (Leader potentiaLeader1 : futureLeaders) {
             for (Leader potentialLeader2 : futureLeaders) {
                 potentiaLeader1.LQI += Math.abs(potentiaLeader1.speed - potentialLeader2.speed); 
             }
         }
         Collections.sort(futureLeaders, new SortByLQI());
-        currentLeaderId = futureLeaders.get(0).vehicleId;
-        futureLeaders.remove(0);
+        currentLeaderId = futureLeaders.get(0).id;
         return;
     }
 
-    public void addRJOINPacket(Packet packet) {
-        pendingRJOINs.add(packet);
+    public void addRequestor(Packet reqPacket) {
+        if (appId != reqPacket.appId) {
+            System.out.println("CONFLICT: cloud appId amd request appId");
+        }
+        this.requestorId = reqPacket.senderId;
+        this.neededResources = reqPacket.reqResources;
+        this.finishedWork = 0;
+        this.initialRequestTime = reqPacket.genTime;
+        this.resourceQuotaMetTime = Integer.MAX_VALUE;
+        for (Member member : workingMembers) {
+            idleMembers.add(member);
+        }
+        workingMembers.clear();
+        addMember(reqPacket);
     }
 
-    public Boolean processPendingRJOIN(int currentTime) {
-        if (pendingRJOINs.isEmpty()) return false;
-        Packet packet = pendingRJOINs.poll();
-        this.requestorId = packet.senderId;
-        this.initialRequestTime = packet.genTime;
-        addMember(packet);
-        this.neededResources = packet.reqResources;
-        this.resourceQuotaMetTime = currentTime;
-        
-        while (members.size() < 4 && idleMembers.size() > 0) {
-            Member newMember = idleMembers.get(0);
-            members.add(newMember);
+    public void addMember(Packet packet) {
+        // Add if not present to the idle member and future leader list
+        for (Member member : idleMembers) {
+            if (member.id == packet.senderId) return;
+        }
+        idleMembers.add(new Member(packet.senderId, Config.WORK_CHUNK_SIZE));    
+        for (Leader potentiaLeader : futureLeaders) {
+            if (potentiaLeader.id == packet.senderId) {
+                return;
+            }
+        }
+        futureLeaders.add(new Leader(packet.senderId, packet.velocity));
+    }
+
+    public Boolean metResourceQuota() {
+        return idleMembers.size() * Config.WORK_CHUNK_SIZE >= neededResources;
+    }
+
+    public void assignWork() {
+        int allocatedWork = 0;
+        while (allocatedWork < neededResources && idleMembers.size() > 0) {
+            workingMembers.add(new Member(idleMembers.get(0).id, Config.WORK_CHUNK_SIZE));
             idleMembers.remove(0);
+            allocatedWork += Config.WORK_CHUNK_SIZE;
         }
-        for (Member member : members) {
-            member.completed = false;
-            member.donatedResources = Config.WORK_CHUNK_SIZE;
-            neededResources -= Config.WORK_CHUNK_SIZE;
+        neededResources = allocatedWork;    
+        return;
+    }
+
+    public Map<Integer, Integer> getWorkAssignment() {
+        Map<Integer, Integer> workAssignment = new HashMap<Integer, Integer>();
+        for (Member member : workingMembers) {
+            if (member.donatedResources == 0) {
+                System.out.println("Member " + member.id + " has 0 donated resources.");
+            }
+            workAssignment.put(member.id, member.donatedResources);
+        } 
+        return workAssignment;
+    }
+
+    public Map<Integer, Integer> reassignWork(int id) {
+        Map<Integer, Integer> workAssignment = new HashMap<Integer, Integer>();
+        int i = 0;
+        for (Member member : workingMembers) {
+            if (member.id == id) break;
+            i++;
+        }   
+
+        if (i != workingMembers.size()) {
+            int reassignAmount = workingMembers.get(i).donatedResources;
+            workingMembers.remove(i);
+            if (idleMembers.size() > 0) {
+                System.out.println("Reassigned " + idleMembers.get(0).id + " for extra " + reassignAmount);
+                workAssignment.put(idleMembers.get(0).id, reassignAmount);
+                int idleMemberId = idleMembers.get(0).id;
+                workingMembers.add(new Member(idleMemberId, reassignAmount));
+                idleMembers.remove(0);
+            }   
+            else if (workingMembers.size() > 0) {
+                System.out.println("Reassigned " + workingMembers.get(0).id + " for extra " + reassignAmount);
+                workAssignment.put(workingMembers.get(0).id, reassignAmount);
+                workingMembers.get(0).donatedResources += reassignAmount;
+            }
+            else {
+                // No member is available, forfeit the work
+                System.out.println("Reassignment forfeited");
+                finishedWork += reassignAmount;
+            }
         }
-        while (neededResources > 0) {
-            members.get(0).donatedResources += Config.WORK_CHUNK_SIZE;
-            neededResources -= Config.WORK_CHUNK_SIZE;
+        for (Member member : idleMembers) {
+            if (member.id == id) {
+                idleMembers.remove(member);
+                break;
+            }
         }
-        this.workingMemberCount = members.size();
-        this.printStats("recycled");
+        for (Leader potentiaLeader : futureLeaders) {
+            if (potentiaLeader.id == id) {
+                futureLeaders.remove(potentiaLeader);
+                break;
+            }
+        }
+        return workAssignment;
+    }
+
+    public Boolean workFinished() {
+        return finishedWork >= neededResources;
+    }
+    
+    public void markAsDone(int id, int workDoneAmount) {
+        // System.out.println(id + " submits " + workDoneAmount + " work for appId " + appId);
+        for (Member member : workingMembers) {
+            if (member.id == id) {
+                // System.out.println(id + " finished " + workDoneAmount + " work for appId " + appId);
+                finishedWork += workDoneAmount;
+                member.donatedResources -= workDoneAmount;
+                if (member.donatedResources == 0) {
+                    member.completed = true;
+                }
+                return;
+            }
+        }
+        // System.out.println(id + " illegal " + workDoneAmount + " work for appId " + appId);
+    }
+
+    public void queueRequestPacket(Packet packet) {
+        pendingRequests.add(packet);
+    }
+
+    public boolean processPendingRequest(int currentTime) {
+        if (pendingRequests.isEmpty()) return false;
+        Packet reqPacket = pendingRequests.poll();
+        addRequestor(reqPacket);
+        assignWork();
+        this.recordCloudFormed(currentTime, "recycled");
         return true;
     }
 
-    public void recordCloudFormed(int formedTime) {
+    public void recordCloudFormed(int formedTime, String type) {
         this.resourceQuotaMetTime = formedTime;
-        this.workingMemberCount = members.size();
         this.simulatorRef.recordCloudFormed(formedTime - this.initialRequestTime);
-        this.printStats("formed");
+        this.printStats(type);
         return;
     }
 
     public void printStats(String status) {
         String message = "Cloud with members ";
-        for (int i = 0; i < members.size(); i++) {
-            message += members.get(i).vehicleId + " ";
+        for (int i = 0; i < workingMembers.size(); i++) {
+            message += workingMembers.get(i).id + " ";
         }        
         message += ("for app id " + appId + " " + status);
         System.out.println(message);
