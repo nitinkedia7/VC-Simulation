@@ -12,8 +12,9 @@ public class Packet {
     Simulator simulatorRef;
     Map<Integer, Integer> workAssignment;
     int workDoneAmount;
+    int requestorId;
 
-    // Default constructor, suffices for RLEAVE, RTEAR
+    // Default constructor, suffices for RLEAVE, RTEAR, RPROBE
     public Packet(Simulator simulatorRef, Config.PACKET_TYPE type, int senderId, int genTime, int appId) {
         this.type = type;
         this.senderId = senderId;   
@@ -58,6 +59,13 @@ public class Packet {
         this(simulatorRef, type, senderId, genTime, appId);
         assert (type == Config.PACKET_TYPE.PDONE) : "Packet constructor type mismatch";
         this.workDoneAmount = workDoneAmount;
+    }
+
+    // Constructor for RQUEUE
+    public Packet(Simulator simulatorRef, Config.PACKET_TYPE type, int senderId, int genTime, int appId, int requestorId, boolean orderTaken) {
+        this(simulatorRef, type, senderId, genTime, appId);
+        assert (type == Config.PACKET_TYPE.RPRESENT) : "Packet constructor type mismatch";
+        this.requestorId = requestorId;
     }
 
     public void recordTransmission(int currentTime, double currentPosition) {

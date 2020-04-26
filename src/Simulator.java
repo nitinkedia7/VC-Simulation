@@ -44,12 +44,15 @@ public class Simulator implements Runnable {
         }
     }
     Map<Config.PACKET_TYPE, PacketStat> packetStats;
-    int totalCloudsFormed;
-    int totalCloudsFormationTime;
+    int totalCloudsFormedSelf;
+    long totalCloudsFormationTimeSelf;
+    int totalCloudsFormedRSU;
+    long totalCloudsFormationTimeRSU;
+    int totalCloudsRecycled;
+
     int leaderAlgoInvoked;
     int leaderChangeCount;
     int leaderLeaveCount;
-
 
     public Simulator(int givenVehiclePerSegment, int givenAverageVehicleSpeed, FileWriter fw) {
         currentTime = 0;
@@ -70,8 +73,12 @@ public class Simulator implements Runnable {
             packetStats.put(type, new PacketStat(type));
 
         }
-        totalCloudsFormed = 0;
-        totalCloudsFormationTime = 0;
+        totalCloudsFormedSelf = 0;
+        totalCloudsFormationTimeSelf = 0;
+        totalCloudsFormedRSU = 0;
+        totalCloudsFormationTimeRSU = 0;
+        totalCloudsRecycled = 0;
+        
         leaderChangeCount = 0;
         leaderLeaveCount = 0;
         leaderAlgoInvoked = 0;
@@ -84,13 +91,13 @@ public class Simulator implements Runnable {
 
         // Spawn RSU's in the mid of each (implicit) segment
         roadSideUnits = new ArrayList<RoadSideUnit>();
-        double rsuPosition = Config.SEGMENT_LENGTH * 0.5;
-        int rsuId = 1;
-        while (rsuPosition < Config.ROAD_END) {
-            roadSideUnits.add(new RoadSideUnit(-1 * rsuId, rsuPosition, timeSync, this, medium, stopTime));
-            rsuPosition += Config.SEGMENT_LENGTH;
-            rsuId++;
-        }
+        // double rsuPosition = Config.SEGMENT_LENGTH * 0.5;
+        // int rsuId = 1;
+        // while (rsuPosition < Config.ROAD_END) {
+        //     roadSideUnits.add(new RoadSideUnit(-1 * rsuId, rsuPosition, timeSync, this, medium, stopTime));
+        //     rsuPosition += Config.SEGMENT_LENGTH;
+        //     rsuId++;
+        // }
         System.out.println("Simulation Initialised");    
     }
 
@@ -110,9 +117,19 @@ public class Simulator implements Runnable {
         packetStats.get(type).totalReceiveTime += receiveTime;
     }
 
-    public synchronized void recordCloudFormed(int formationTime) {
-        totalCloudsFormed++;
-        totalCloudsFormationTime += formationTime;
+    public synchronized void recordCloudFormed(int formationTime, boolean formedByRSU) {
+        if (formedByRSU) {
+            totalCloudsFormedRSU++;
+            totalCloudsFormationTimeRSU += formationTime;
+        }
+        else {
+            totalCloudsFormedSelf++;
+            totalCloudsFormationTimeSelf += formationTime;
+        }
+    }
+
+    public synchronized void incrTotalCloudsRecycled() {
+        totalCloudsRecycled++;
     }
 
     public synchronized void incrLeaderChangeCount() {
@@ -150,22 +167,26 @@ public class Simulator implements Runnable {
         System.out.println("Average transmit time in ms = " + decimalFormat.format(((double) totalTransmitTime) / totalTransmittedCount));
         System.out.println("Average receive time in ms = " + decimalFormat.format(((double) totalReceiveTime) / totalReceivedCount));
     
-        double averageClusterOverhead = ((double) totalTransmittedCount) / totalCloudsFormed;
-        double averageCloudFormationTime = ((double) totalCloudsFormationTime) / totalCloudsFormed;
+        double averageClusterOverhead = ((double) totalTransmittedCount) / (totalCloudsFormedSelf + totalCloudsFormedRSU);
+        double averageCloudFormationTimeSelf = ((double) totalCloudsFormationTimeSelf) / totalCloudsFormedSelf;
+        double averageCloudFormationTimeRSU = ((double) totalCloudsFormationTimeRSU) / totalCloudsFormedRSU;
         System.out.println();
         System.out.println("Average cluster overhead = " + decimalFormat.format(averageClusterOverhead));
-        System.out.println("Average cloud formation time in ms = " + decimalFormat.format(averageCloudFormationTime));
+        System.out.println("Total clouds formed by RSU = " + totalCloudsFormedRSU);
+        System.out.println("Average cloud formation time (ms) by RSU = " + decimalFormat.format(averageCloudFormationTimeRSU));
+        System.out.println("Total clouds formed distributedly = " + totalCloudsFormedSelf);
+        System.out.println("Average cloud formation time (ms) distributedly = " + decimalFormat.format(averageCloudFormationTimeSelf));
+        System.out.println("Total clouds recycled = " + totalCloudsRecycled);
         System.out.println("Leader change count = " + leaderChangeCount);
         System.out.println("Leader leave count = " + leaderLeaveCount);
-        System.out.println("Total cloud formed/recyled = " + totalCloudsFormed);
 
         String csvRow = String.format(
-            "%d,%d,%d,%s,%s,%d,%d,%d\n",
+            "%d,%d,%s,%s,%s,%d,%d,%d\n",
             vehiclesPerSegment,
-            totalVehicleCount,
             averageVehicleSpeed,
             decimalFormat.format(averageClusterOverhead),
-            decimalFormat.format(averageCloudFormationTime),
+            decimalFormat.format(averageCloudFormationTimeRSU),
+            decimalFormat.format(averageCloudFormationTimeSelf),
             leaderChangeCount,
             leaderLeaveCount,
             leaderAlgoInvoked
@@ -205,11 +226,11 @@ public class Simulator implements Runnable {
 
             PrintStream console = System.out;
             FileWriter fw = new FileWriter(logDirectoryPath + "/plot.csv", true);
-            fw.write("Average Vehicle Density,Number of Vehicles,Average Vehicle Speed,Average Cluster Overhead,Average Cloud Formation Time,Leader Change Count, Leader Leave Count, Leader Algo Invoked\n");
+            fw.write("Average Vehicles per Segment,Average Vehicle Speed (km/h),Average Cluster Overhead (Ratio),Average Cloud Formation Time by RSU (ms),Average Cloud Formation Time Distributedly(ms),Leader Change Count, Leader Leave Count, Leader Algo Invoked\n");
             fw.flush();
 
             int avgVehicleSpeedKMPH = 60;
-            for (int vehiclesPerSegment = 8; vehiclesPerSegment <= 36; vehiclesPerSegment += 4) {
+            for (int vehiclesPerSegment = 24; vehiclesPerSegment <= 24; vehiclesPerSegment += 4) {
                 try {
                     String logFilePath = String.format("%s/%d_%d.log", logDirectoryPath, vehiclesPerSegment, avgVehicleSpeedKMPH);
                     PrintStream logFile = new PrintStream(new File(logFilePath));
@@ -226,23 +247,23 @@ public class Simulator implements Runnable {
                 }
             }
 
-            int averageVehiclePerSegment = 24;
-            for (int vehicleSpeedKMPH = 30; vehicleSpeedKMPH <= 90; vehicleSpeedKMPH += 10) {
-                try {
-                    String logFilePath = String.format("%s/%d_%d.log", logDirectoryPath, averageVehiclePerSegment, vehicleSpeedKMPH);
-                    PrintStream logFile = new PrintStream(new File(logFilePath));
-                    System.setOut(logFile);
+            // int averageVehiclePerSegment = 24;
+            // for (int vehicleSpeedKMPH = 30; vehicleSpeedKMPH <= 90; vehicleSpeedKMPH += 10) {
+            //     try {
+            //         String logFilePath = String.format("%s/%d_%d.log", logDirectoryPath, averageVehiclePerSegment, vehicleSpeedKMPH);
+            //         PrintStream logFile = new PrintStream(new File(logFilePath));
+            //         System.setOut(logFile);
                     
-                    Simulator simulator = new Simulator(averageVehiclePerSegment, vehicleSpeedKMPH, fw);
-                    simulator.run();
-                    simulator.printStatistics();
-                } catch (Exception e) {
-                    System.err.printf(
-                        "Simulation with density %d and average speed %d failed.\n", averageVehiclePerSegment, vehicleSpeedKMPH
-                    );
-                    e.printStackTrace(System.err);
-                }    
-            }
+            //         Simulator simulator = new Simulator(averageVehiclePerSegment, vehicleSpeedKMPH, fw);
+            //         simulator.run();
+            //         simulator.printStatistics();
+            //     } catch (Exception e) {
+            //         System.err.printf(
+            //             "Simulation with density %d and average speed %d failed.\n", averageVehiclePerSegment, vehicleSpeedKMPH
+            //         );
+            //         e.printStackTrace(System.err);
+            //     }    
+            // }
             fw.close();
         } catch (IOException ioe) {
             System.err.println("IOException: " + ioe.getMessage());

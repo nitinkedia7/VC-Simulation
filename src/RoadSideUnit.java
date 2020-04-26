@@ -40,7 +40,7 @@ public class RoadSideUnit implements Runnable {
     public void handleRREQ(Packet reqPacket) {
         Cloud cloud = clouds.get(reqPacket.appId);
         if (cloud == null) { // RSU starts making a cloud
-            clouds.put(reqPacket.appId, new Cloud(simulatorRef, reqPacket.appId, id));
+            clouds.put(reqPacket.appId, new Cloud(simulatorRef, reqPacket.appId, id, true));
             clouds.get(reqPacket.appId).addRequestor(reqPacket);
         }
         else if (cloud.isCloudLeader(id)) {
@@ -58,9 +58,18 @@ public class RoadSideUnit implements Runnable {
             return;
         }
         cloud.addMember(donorPacket);
-        if (cloud.metResourceQuota()) {
+        if (cloud.justMetResourceQuota()) {
             cloud.electLeader();
             transmitQueue.add(new Packet(simulatorRef, Config.PACKET_TYPE.RACK, id, currentTime, donorPacket.appId, cloud));
+        }
+    }
+
+    public void handleRPROBE(Packet probe) {
+        Cloud cloud = clouds.get(probe.appId);
+        if (cloud != null && cloud.isCloudLeader(id)) {
+            // send RPRESENT
+            Packet presentPacket = new Packet(simulatorRef, Config.PACKET_TYPE.RPRESENT, id, currentTime, probe.appId, probe.senderId, true);
+            transmitQueue.add(presentPacket);
         }
     }
 
@@ -121,6 +130,9 @@ public class RoadSideUnit implements Runnable {
                         break;
                     case RTEAR:
                         clouds.remove(p.appId);
+                        break;
+                    case RPROBE:
+                        handleRPROBE(p);
                         break;
                     default:
                         // PSTART, PDONE are between VC members

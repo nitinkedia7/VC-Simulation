@@ -8,6 +8,7 @@ public class Cloud {
     int finishedWork;
     int initialRequestTime;
     int resourceQuotaMetTime;
+    boolean formedByRSU;
     Simulator simulatorRef;
     Queue<Packet> pendingRequests;
     class Member {
@@ -43,10 +44,11 @@ public class Cloud {
         }
     }
 
-    public Cloud(Simulator simulatorRef, int appId, int parentId) {
+    public Cloud(Simulator simulatorRef, int appId, int parentId, boolean formedByRSU) {
         this.appId = appId;
         this.currentLeaderId = parentId;
         this.simulatorRef = simulatorRef;
+        this.formedByRSU = formedByRSU;
         this.pendingRequests = new LinkedList<>();
         this.workingMembers = new ArrayList<Member>();
         this.idleMembers = new ArrayList<Member>();
@@ -125,8 +127,8 @@ public class Cloud {
         futureLeaders.add(new Leader(packet.senderId, packet.velocity));
     }
 
-    public Boolean metResourceQuota() {
-        return idleMembers.size() * Config.WORK_CHUNK_SIZE >= neededResources;
+    public Boolean justMetResourceQuota() {
+        return resourceQuotaMetTime == Integer.MAX_VALUE && idleMembers.size() * Config.WORK_CHUNK_SIZE >= neededResources;
     }
 
     public void assignWork() {
@@ -217,6 +219,7 @@ public class Cloud {
 
     public void queueRequestPacket(Packet packet) {
         pendingRequests.add(packet);
+        this.simulatorRef.incrTotalCloudsRecycled();
     }
 
     public boolean processPendingRequest(int currentTime) {
@@ -224,13 +227,14 @@ public class Cloud {
         Packet reqPacket = pendingRequests.poll();
         addRequestor(reqPacket);
         assignWork();
-        this.recordCloudFormed(currentTime, "recycled");
+        this.resourceQuotaMetTime = currentTime;
+        this.printStats("recycled");
         return true;
     }
 
     public void recordCloudFormed(int formedTime, String type) {
         this.resourceQuotaMetTime = formedTime;
-        this.simulatorRef.recordCloudFormed(formedTime - this.initialRequestTime);
+        this.simulatorRef.recordCloudFormed(formedTime - this.initialRequestTime, formedByRSU);
         this.printStats(type);
         return;
     }

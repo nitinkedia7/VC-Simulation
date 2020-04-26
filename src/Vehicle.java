@@ -41,6 +41,9 @@ public class Vehicle implements Runnable {
     int bookedTillTime;
     Queue<ProcessBlock> processQueue;
 
+    Packet pendingReqPacket;
+    boolean hasPendingReq;
+
     public Vehicle(int id, Phaser timeSync, Simulator simulatorRef, Medium mediumRef, int stopTime, double averageSpeed) {
         this.id = id;        
         this.position = ThreadLocalRandom.current().nextDouble() * Config.ROAD_END;
@@ -62,6 +65,7 @@ public class Vehicle implements Runnable {
         this.processQueue = new LinkedList<ProcessBlock>();
         this.backoffTime = 0;
         this.contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
+        this.hasPendingReq = false;
 
         this.timeSync = timeSync;
         timeSync.register();
@@ -98,6 +102,9 @@ public class Vehicle implements Runnable {
                 }
             });
             clouds.clear();
+            // Clear any pending requests
+            hasPendingReq = false;
+            pendingReqPacket = null;
         }
         position = newPosition;
 
@@ -112,14 +119,17 @@ public class Vehicle implements Runnable {
     }
 
     public void handleRREQ(Packet p) {
-        if (p.senderId == id) {
-            Cloud cloud = clouds.get(p.appId);
-            if (cloud != null && cloud.isCloudLeader(id)) {
-                cloud.queueRequestPacket(p);
-            }
-        } 
-        else {
-            transmitQueue.add(new Packet(simulatorRef, Config.PACKET_TYPE.RREP, id, currentTime, direction * speed, p.appId));
+        // If this vehicle is the leader then it enqueues it
+        Cloud cloud = clouds.get(p.appId);
+        if (cloud != null && cloud.isCloudLeader(id)) {
+            cloud.queueRequestPacket(p);
+        }
+
+        // Also send a RREP, if someone else's request
+        if (p.senderId != id) {
+            Packet rrepPacket = new Packet(simulatorRef, Config.PACKET_TYPE.RREP, id, currentTime, direction * speed, p.appId);
+            transmitQueue.add(rrepPacket);
+            handleRREP(rrepPacket);
         }
     }
 
@@ -127,6 +137,13 @@ public class Vehicle implements Runnable {
         Cloud cloud = clouds.get(donorPacket.appId);
         if (cloud == null || !cloud.isCloudLeader(id)) return;
         cloud.addMember(donorPacket);
+        if (cloud.justMetResourceQuota()) {
+            cloud.electLeader();
+            Packet ackPacket = new Packet(simulatorRef, Config.PACKET_TYPE.RACK, id, currentTime, donorPacket.appId, cloud);
+            transmitQueue.add(ackPacket);
+            handleRACK(ackPacket);
+            clouds.remove(donorPacket.appId);
+        }
     }   
 
     public void handleRACK(Packet ackPacket) {
@@ -189,6 +206,37 @@ public class Vehicle implements Runnable {
         }
     }
 
+    public void selfInitiateCloudFormation(Packet reqPacket) {
+        // Ensure that no cloud this appId exists till now
+        Cloud cloud = clouds.get(reqPacket.appId);
+        if (cloud != null) {
+            System.out.println("Self initiating cloud formation when one is already present.");
+            transmitQueue.add(reqPacket);
+            return;
+        }
+        clouds.put(reqPacket.appId, new Cloud(simulatorRef, reqPacket.appId, id, false));
+        clouds.get(reqPacket.appId).addRequestor(reqPacket);
+        transmitQueue.add(reqPacket);
+    }
+
+    public void handleRPROBE(Packet probe) {
+        Cloud cloud = clouds.get(probe.appId);
+        if (cloud != null && cloud.isCloudLeader(id)) {
+            // send RPRESENT
+            Packet presentPacket = new Packet(simulatorRef, Config.PACKET_TYPE.RPRESENT, id, currentTime, probe.appId, probe.senderId, true);
+            transmitQueue.add(presentPacket);
+            handleRPRESENT(presentPacket);
+        }
+    }
+
+    public void handleRPRESENT(Packet packet) {
+        if (!hasPendingReq) return;
+        if (packet.appId == pendingReqPacket.appId && packet.requestorId == id) {
+            hasPendingReq = false;
+            transmitQueue.add(pendingReqPacket);
+        }
+    }
+
     public void run() {
         while (currentTime <= stopTime) {
             // System.out.println("Vehicle " + id + " starting interval " + currentTime);
@@ -240,14 +288,34 @@ public class Vehicle implements Runnable {
                     break;
                 }
             }
-             
-            // (Randomly) Request for an application
-            int hasRequest = ThreadLocalRandom.current().nextInt(Config.INV_RREQ_PROB);
-            if (hasRequest == 1) {
-                int appType = ThreadLocalRandom.current().nextInt(Config.APPLICATION_TYPE_COUNT);
-                Packet requestPacket = new Packet(simulatorRef, Config.PACKET_TYPE.RREQ, id, currentTime, speed * direction, appType, Config.MAX_RESOURCE_QUOTA); 
-                transmitQueue.add(requestPacket);
-                handleRREQ(requestPacket);
+
+            if (hasPendingReq) {
+                // Wait Config.MAX_WAIT_TIME for a RQUEUE message, if received OK, else self-initiate
+                if (currentTime >= pendingReqPacket.genTime + Config.MAX_RQUEUE_WAIT_TIME) {
+                    System.out.println("Vehicle " + id + " self-initiating cloud formation for appId " + pendingReqPacket.appId);
+                    selfInitiateCloudFormation(pendingReqPacket);
+                    hasPendingReq = false;
+                }
+            } 
+            else {
+                // (Randomly) Request for an application
+                int hasRequest = ThreadLocalRandom.current().nextInt(Config.INV_RREQ_PROB);
+                int appId = ThreadLocalRandom.current().nextInt(1);
+                if (hasRequest == 1) {
+                    pendingReqPacket = new Packet(simulatorRef, Config.PACKET_TYPE.RREQ, id, currentTime, speed * direction, appId, Config.MAX_RESOURCE_QUOTA); 
+                    if (clouds.get(appId) != null) {
+                        transmitQueue.add(pendingReqPacket);
+                        handleRREQ(pendingReqPacket);
+                    }
+                    else {
+                        // Save this request
+                        hasPendingReq = true;
+                        // send a RPROBE to see if RSU/CL is present for this appId
+                        Packet probe = new Packet(simulatorRef, Config.PACKET_TYPE.RPROBE, id, currentTime, appId);
+                        transmitQueue.add(probe);
+                        handleRPROBE(probe);
+                    }
+                }
             }
 
             // Also get and process receivedPackets
@@ -279,6 +347,12 @@ public class Vehicle implements Runnable {
                         break;
                     case RLEAVE:
                         handleRLEAVE(p);
+                        break;
+                    case RPROBE:
+                        handleRPROBE(p);
+                        break;
+                    case RPRESENT:
+                        handleRPRESENT(p);
                         break;
                     default:
                         System.out.println("Unhandled packet type " + p.type);
