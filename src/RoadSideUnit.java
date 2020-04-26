@@ -48,6 +48,14 @@ public class RoadSideUnit implements Runnable {
         }
     }
 
+    public void handleRJOIN(Packet p) {
+        // If this vehicle is the leader then it enqueues it
+        Cloud cloud = clouds.get(p.appId);
+        if (cloud != null && cloud.isCloudLeader(id)) {
+            cloud.queueRequestPacket(p);
+        }
+    }
+
     public void handleRREP(Packet donorPacket) {
         Cloud cloud = clouds.get(donorPacket.appId);
         if (cloud == null) {
@@ -121,6 +129,9 @@ public class RoadSideUnit implements Runnable {
                 switch (p.type) {
                     case RREQ:
                         handleRREQ(p);
+                        break;
+                    case RJOIN:
+                        handleRJOIN(p);
                         break;
                     case RREP:
                         handleRREP(p);

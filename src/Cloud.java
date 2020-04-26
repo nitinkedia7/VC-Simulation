@@ -164,22 +164,24 @@ public class Cloud {
         if (i != workingMembers.size()) {
             int reassignAmount = workingMembers.get(i).donatedResources;
             workingMembers.remove(i);
-            if (idleMembers.size() > 0) {
-                System.out.println("Reassigned " + idleMembers.get(0).id + " for extra " + reassignAmount);
-                workAssignment.put(idleMembers.get(0).id, reassignAmount);
-                int idleMemberId = idleMembers.get(0).id;
-                workingMembers.add(new Member(idleMemberId, reassignAmount));
-                idleMembers.remove(0);
-            }   
-            else if (workingMembers.size() > 0) {
-                System.out.println("Reassigned " + workingMembers.get(0).id + " for extra " + reassignAmount);
-                workAssignment.put(workingMembers.get(0).id, reassignAmount);
-                workingMembers.get(0).donatedResources += reassignAmount;
-            }
-            else {
-                // No member is available, forfeit the work
-                System.out.println("Reassignment forfeited");
-                finishedWork += reassignAmount;
+            if (reassignAmount != 0) {
+                if (idleMembers.size() > 0) {
+                    System.out.println("Reassigned " + idleMembers.get(0).id + " for extra " + reassignAmount);
+                    workAssignment.put(idleMembers.get(0).id, reassignAmount);
+                    int idleMemberId = idleMembers.get(0).id;
+                    workingMembers.add(new Member(idleMemberId, reassignAmount));
+                    idleMembers.remove(0);
+                }   
+                else if (workingMembers.size() > 0) {
+                    System.out.println("Reassigned " + workingMembers.get(0).id + " for extra " + reassignAmount);
+                    workAssignment.put(workingMembers.get(0).id, reassignAmount);
+                    workingMembers.get(0).donatedResources += reassignAmount;
+                }
+                else {
+                    // No member is available, forfeit the work
+                    System.out.println("Reassignment forfeited");
+                    finishedWork += reassignAmount;
+                }
             }
         }
         for (Member member : idleMembers) {
@@ -219,7 +221,6 @@ public class Cloud {
 
     public void queueRequestPacket(Packet packet) {
         pendingRequests.add(packet);
-        this.simulatorRef.incrTotalCloudsRecycled();
     }
 
     public boolean processPendingRequest(int currentTime) {
@@ -228,6 +229,7 @@ public class Cloud {
         addRequestor(reqPacket);
         assignWork();
         this.resourceQuotaMetTime = currentTime;
+        this.simulatorRef.incrTotalCloudsRecycled();
         this.printStats("recycled");
         return true;
     }
