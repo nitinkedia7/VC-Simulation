@@ -41,8 +41,9 @@ public class Vehicle implements Runnable {
     int bookedTillTime;
     Queue<ProcessBlock> processQueue;
 
-    Packet pendingReqPacket;
-    boolean hasPendingReq;
+    int pendingAppId;
+    int pendingRequestGenTime;
+    boolean hasPendingRequest;
 
     public Vehicle(int id, Phaser timeSync, Simulator simulatorRef, Medium mediumRef, int stopTime, double averageSpeed) {
         this.id = id;        
@@ -65,7 +66,7 @@ public class Vehicle implements Runnable {
         this.processQueue = new LinkedList<ProcessBlock>();
         this.backoffTime = 0;
         this.contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
-        this.hasPendingReq = false;
+        this.hasPendingRequest = false;
 
         this.timeSync = timeSync;
         timeSync.register();
@@ -103,8 +104,7 @@ public class Vehicle implements Runnable {
             });
             clouds.clear();
             // Clear any pending requests
-            hasPendingReq = false;
-            pendingReqPacket = null;
+            hasPendingRequest = false;
         }
         position = newPosition;
 
@@ -149,8 +149,8 @@ public class Vehicle implements Runnable {
             cloud.electLeader();
             Packet ackPacket = new Packet(simulatorRef, Config.PACKET_TYPE.RACK, id, currentTime, donorPacket.appId, cloud);
             transmitQueue.add(ackPacket);
-            handleRACK(ackPacket);
             clouds.remove(donorPacket.appId);
+            handleRACK(ackPacket);
         }
     }   
 
@@ -214,14 +214,19 @@ public class Vehicle implements Runnable {
         }
     }
 
-    public void selfInitiateCloudFormation(Packet reqPacket) {
+    public void selfInitiateCloudFormation() {
+        System.out.println("Vehicle " + id + " self-initiating cloud formation for appId " + pendingAppId);
+
         // Ensure that no cloud this appId exists till now
-        Cloud cloud = clouds.get(reqPacket.appId);
+        Cloud cloud = clouds.get(pendingAppId);
         if (cloud != null) {
-            System.out.println("Self initiating cloud formation when one is already present.");
-            transmitQueue.add(reqPacket);
+            Packet rjoinPacket = new Packet(simulatorRef, Config.PACKET_TYPE.RJOIN, id, currentTime, speed * direction, pendingAppId, Config.MAX_RESOURCE_QUOTA);
+            // System.out.println("Self initiating cloud formation when one is already present.");
+            transmitQueue.add(rjoinPacket);
+            handleRJOIN(rjoinPacket);
             return;
         }
+        Packet reqPacket = new Packet(simulatorRef, Config.PACKET_TYPE.RREQ, id, currentTime, speed * direction, pendingAppId, Config.MAX_RESOURCE_QUOTA);
         clouds.put(reqPacket.appId, new Cloud(simulatorRef, reqPacket.appId, id, false));
         clouds.get(reqPacket.appId).addRequestor(reqPacket);
         transmitQueue.add(reqPacket);
@@ -238,11 +243,12 @@ public class Vehicle implements Runnable {
     }
 
     public void handleRPRESENT(Packet packet) {
-        if (!hasPendingReq) return;
-        if (packet.appId == pendingReqPacket.appId && packet.requestorId == id) {
-            hasPendingReq = false;
-            Packet rjoinPacket = new Packet(simulatorRef, Config.PACKET_TYPE.RJOIN, id, currentTime, speed * direction, pendingReqPacket.appId, Config.MAX_RESOURCE_QUOTA);
+        if (!hasPendingRequest) return;
+        if (packet.appId == pendingAppId && packet.requestorId == id) {
+            hasPendingRequest = false;
+            Packet rjoinPacket = new Packet(simulatorRef, Config.PACKET_TYPE.RJOIN, id, currentTime, speed * direction, pendingAppId, Config.MAX_RESOURCE_QUOTA);
             transmitQueue.add(rjoinPacket);
+            handleRJOIN(rjoinPacket);
         }
     }
 
@@ -256,9 +262,11 @@ public class Vehicle implements Runnable {
             if (!transmitQueue.isEmpty()) {
                 if (backoffTime == 0) {
                     if (targetChannel.isFree(id, position)) {
-                        while (!transmitQueue.isEmpty()) {
+                        int transmittedCount = 0;
+                        while (!transmitQueue.isEmpty() && transmittedCount < 1) {
                             Packet packet = transmitQueue.poll();
                             targetChannel.transmitPacket(packet, currentTime, position);
+                            transmittedCount++;
                         }        
                         targetChannel.stopTransmit(id);
                         // Reset contention window
@@ -298,12 +306,11 @@ public class Vehicle implements Runnable {
                 }
             }
 
-            if (hasPendingReq) {
+            if (hasPendingRequest) {
                 // Wait Config.MAX_WAIT_TIME for a RQUEUE message, if received OK, else self-initiate
-                if (currentTime >= pendingReqPacket.genTime + Config.MAX_RQUEUE_WAIT_TIME) {
-                    System.out.println("Vehicle " + id + " self-initiating cloud formation for appId " + pendingReqPacket.appId);
-                    selfInitiateCloudFormation(pendingReqPacket);
-                    hasPendingReq = false;
+                if (currentTime >= pendingRequestGenTime + Config.MAX_RQUEUE_WAIT_TIME) {
+                    selfInitiateCloudFormation();
+                    hasPendingRequest = false;
                 }
             } 
             else {
@@ -317,9 +324,10 @@ public class Vehicle implements Runnable {
                         handleRJOIN(rjoinPacket);
                     }
                     else {
-                        pendingReqPacket = new Packet(simulatorRef, Config.PACKET_TYPE.RREQ, id, currentTime, speed * direction, appId, Config.MAX_RESOURCE_QUOTA); 
                         // Save this request
-                        hasPendingReq = true;
+                        pendingRequestGenTime = currentTime;
+                        pendingAppId = appId;
+                        hasPendingRequest = true;
                         // send a RPROBE to see if RSU/CL is present for this appId
                         Packet probe = new Packet(simulatorRef, Config.PACKET_TYPE.RPROBE, id, currentTime, appId);
                         transmitQueue.add(probe);

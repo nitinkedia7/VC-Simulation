@@ -226,44 +226,44 @@ public class Simulator implements Runnable {
 
             PrintStream console = System.out;
             FileWriter fw = new FileWriter(logDirectoryPath + "/plot.csv", true);
-            fw.write("Average Vehicles per Segment,Average Vehicle Speed (km/h),Average Cluster Overhead (Ratio),Average Cloud Formation Time by RSU (ms),Average Cloud Formation Time Distributedly(ms),Leader Change Count, Leader Leave Count, Leader Algo Invoked\n");
+            fw.write("Average Vehicle Density,Average Vehicle Speed (km/h),Average Cluster Overhead (Ratio),Average Cloud Formation Time by RSU (ms),Average Cloud Formation Time Distributedly (ms),Leader Change Count,Leader Leave Count,Leader Algo Invoked\n");
             fw.flush();
 
-            // int avgVehicleSpeedKMPH = 60;
-            // for (int vehiclesPerSegment = 8; vehiclesPerSegment <= 36; vehiclesPerSegment += 4) {
-            //     try {
-            //         String logFilePath = String.format("%s/%d_%d.log", logDirectoryPath, vehiclesPerSegment, avgVehicleSpeedKMPH);
-            //         PrintStream logFile = new PrintStream(new File(logFilePath));
-            //         System.setOut(logFile);
-                    
-            //         Simulator simulator = new Simulator(vehiclesPerSegment, avgVehicleSpeedKMPH, fw);
-            //         simulator.run();
-            //         simulator.printStatistics();
-            //     } catch (Exception e) {
-            //         System.err.printf(
-            //             "Simulation with density %d and average speed %d failed.\n", vehiclesPerSegment, avgVehicleSpeedKMPH
-            //         );
-            //         e.printStackTrace(System.err);
-            //     }
-            // }
-
-            int averageVehiclePerSegment = 24;
-            for (int vehicleSpeedKMPH = 30; vehicleSpeedKMPH <= 90; vehicleSpeedKMPH += 10) {
+            int avgVehicleSpeedKMPH = 60;
+            for (int vehiclesPerSegment = 24; vehiclesPerSegment <= 24; vehiclesPerSegment += 4) {
                 try {
-                    String logFilePath = String.format("%s/%d_%d.log", logDirectoryPath, averageVehiclePerSegment, vehicleSpeedKMPH);
+                    String logFilePath = String.format("%s/%d_%d.log", logDirectoryPath, vehiclesPerSegment, avgVehicleSpeedKMPH);
                     PrintStream logFile = new PrintStream(new File(logFilePath));
                     System.setOut(logFile);
                     
-                    Simulator simulator = new Simulator(averageVehiclePerSegment, vehicleSpeedKMPH, fw);
+                    Simulator simulator = new Simulator(vehiclesPerSegment, avgVehicleSpeedKMPH, fw);
                     simulator.run();
                     simulator.printStatistics();
                 } catch (Exception e) {
                     System.err.printf(
-                        "Simulation with density %d and average speed %d failed.\n", averageVehiclePerSegment, vehicleSpeedKMPH
+                        "Simulation with density %d and average speed %d failed.\n", vehiclesPerSegment, avgVehicleSpeedKMPH
                     );
                     e.printStackTrace(System.err);
-                }    
+                }
             }
+
+            // int averageVehiclePerSegment = 24;
+            // for (int vehicleSpeedKMPH = 30; vehicleSpeedKMPH <= 90; vehicleSpeedKMPH += 10) {
+            //     try {
+            //         String logFilePath = String.format("%s/%d_%d.log", logDirectoryPath, averageVehiclePerSegment, vehicleSpeedKMPH);
+            //         PrintStream logFile = new PrintStream(new File(logFilePath));
+            //         System.setOut(logFile);
+                    
+            //         Simulator simulator = new Simulator(averageVehiclePerSegment, vehicleSpeedKMPH, fw);
+            //         simulator.run();
+            //         simulator.printStatistics();
+            //     } catch (Exception e) {
+            //         System.err.printf(
+            //             "Simulation with density %d and average speed %d failed.\n", averageVehiclePerSegment, vehicleSpeedKMPH
+            //         );
+            //         e.printStackTrace(System.err);
+            //     }    
+            // }
             fw.close();
         } catch (IOException ioe) {
             System.err.println("IOException: " + ioe.getMessage());
