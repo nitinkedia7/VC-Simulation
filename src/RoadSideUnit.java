@@ -65,6 +65,7 @@ public class RoadSideUnit implements Runnable {
         if (!cloud.isCloudLeader(id)) {
             return;
         }
+        simulatorRef.incrRrepReceiveCount();
         cloud.addMember(donorPacket.senderId, donorPacket.offeredResources, donorPacket.velocity);
         if (cloud.justMetResourceQuota()) {
             cloud.electLeader();

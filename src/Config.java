@@ -11,7 +11,6 @@ public class Config {
     static enum PACKET_TYPE {
         RREQ, RJOIN, RREP, RACK, RTEAR, PSTART, PDONE, RLEAVE, RPROBE, RPRESENT;
     }
-    static int PACKET_TYPE_COUNT = 8;
     static boolean useFair = true;
     static int APPLICATION_TYPE_COUNT = 1;
     static int TRY_LOCK_WAIT_TIME = 100;

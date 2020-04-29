@@ -53,6 +53,7 @@ public class Simulator implements Runnable {
 
     int leaderChangeCount;
     int leaderLeaveCount;
+    int rrepReceivecCount;
 
     public Simulator(int givenVehiclePerSegment, int givenAverageVehicleSpeed, FileWriter fw) {
         currentTime = 0;
@@ -82,6 +83,8 @@ public class Simulator implements Runnable {
         
         leaderChangeCount = 0;
         leaderLeaveCount = 0;
+        rrepReceivecCount = 0;
+
         // Spawn vehicles at random positions
         vehicles  = new ArrayList<Vehicle>();
         for (int i = 1; i <= totalVehicleCount; i++) {
@@ -151,6 +154,10 @@ public class Simulator implements Runnable {
         leaderLeaveCount++;
     }
 
+    public synchronized void incrRrepReceiveCount() {
+        rrepReceivecCount++;
+    }
+
     public void printStatistics() {
         int totalGeneratedCount = 0;
         int totalTransmittedCount = 0;
@@ -187,6 +194,7 @@ public class Simulator implements Runnable {
         System.out.println("Total requests still queued = " + totalRequestsQueued);
         System.out.println("Leader change count = " + leaderChangeCount);
         System.out.println("Leader leave count = " + leaderLeaveCount);
+        System.out.println("RREP received by leader/RSU = " + rrepReceivecCount);
 
         String csvRow = String.format(
             "%d,%d,%d,%d,%d,%s,%d,%s,%d,%s,%d\n",
@@ -249,7 +257,7 @@ public class Simulator implements Runnable {
             fw.flush();
 
             int avgVehicleSpeedKMPH = 60;
-            for (int vehiclesPerSegment = 24; vehiclesPerSegment <= 24; vehiclesPerSegment += 8) {
+            for (int vehiclesPerSegment = 16; vehiclesPerSegment <= 16; vehiclesPerSegment += 8) {
                 try {
                     String logFilePath = String.format("%s/%d_%d.log", logDirectoryPath, vehiclesPerSegment, avgVehicleSpeedKMPH);
                     PrintStream logFile = new PrintStream(new File(logFilePath));

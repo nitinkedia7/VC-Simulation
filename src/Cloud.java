@@ -95,6 +95,16 @@ public class Cloud {
         this.futureLeaders = new LinkedList<>();
     }
 
+    private void add(int resourceAmount) {
+        totalFreeResource += resourceAmount;
+        // System.err.println(totalFreeResource);
+    }
+
+    private void subtract(int resourceAmount) {
+        totalFreeResource -= resourceAmount;
+        // System.err.println(totalFreeResource);
+    }
+
     public boolean isMember(int id) {
         return freeResourcesMap.containsKey(id);
     }
@@ -109,7 +119,8 @@ public class Cloud {
             freeResourcesMap.put(id, resourceLimit);
             freeResourcesSet.add(new Pair(resourceLimit, id));
             futureLeaders.add(new Leader(id, velocity));
-            totalFreeResource += resourceLimit;
+            // totalFreeResource += resourceLimit;
+            add(resourceLimit);
         }
     }
 
@@ -126,13 +137,15 @@ public class Cloud {
                 freeResourcesSet.add(new Pair(p.first - acceptedResources, p.second));
                 workAssignment.put(p.second, acceptedResources);
                 allocatedResources += acceptedResources;
-                totalFreeResource -= acceptedResources;
+                // totalFreeResource -= acceptedResources;
+                subtract(allocatedResources);
             }
             else {
                 freeResourcesMap.replace(p.second, 0);
                 workAssignment.put(p.second, p.first);
                 allocatedResources += p.first;
-                totalFreeResource -= p.first;
+                // totalFreeResource -= p.first;
+                subtract(p.first);
             }
         }
         assert(allocatedResources == resourcesNeeded);
@@ -162,7 +175,8 @@ public class Cloud {
         }
         freeResourcesSet.add(new Pair(freeResource + replenishAmount, id));
         freeResourcesMap.replace(id, freeResource + replenishAmount);
-        totalFreeResource += replenishAmount;
+        // totalFreeResource += replenishAmount;
+        add(replenishAmount);
         return;
     }
 
@@ -231,7 +245,8 @@ public class Cloud {
             assert(removed == true);
         }
         freeResourcesMap.remove(id);
-        totalFreeResource -= resourceProvided;
+        // totalFreeResource -= resourceProvided;
+        subtract(resourceProvided);
         for (Leader potentiaLeader : futureLeaders) {
             if (potentiaLeader.id == id) {
                 futureLeaders.remove(potentiaLeader);

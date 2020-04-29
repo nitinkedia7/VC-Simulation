@@ -140,12 +140,19 @@ public class Vehicle implements Runnable {
         Cloud cloud = clouds.get(p.appId);
         if (cloud != null && cloud.isCloudLeader(id)) {
             cloud.addNewRequest(p);
+            Map<Integer, Map<Integer,Integer>> newWorkStore = cloud.processPendingRequests();
+            if (!newWorkStore.isEmpty()) {
+                Packet pstartPacket = new Packet(simulatorRef, Config.PACKET_TYPE.PSTART, id, currentTime, cloud.appId, newWorkStore);
+                transmitQueue.add(pstartPacket);
+                handlePSTART(pstartPacket);
+            }
         }
     }
 
     public void handleRREP(Packet donorPacket) {
         Cloud cloud = clouds.get(donorPacket.appId);
         if (cloud == null || !cloud.isCloudLeader(id)) return;
+        simulatorRef.incrRrepReceiveCount();
         cloud.addMember(donorPacket.senderId, donorPacket.offeredResources, donorPacket.velocity);
         if (cloud.justMetResourceQuota()) {
             cloud.electLeader();
