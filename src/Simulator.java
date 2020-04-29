@@ -48,7 +48,7 @@ public class Simulator implements Runnable {
     long totalCloudsFormationTimeSelf;
     int totalCloudsFormedRSU;
     long totalCloudsFormationTimeRSU;
-    int totalCloudsRecycled;
+    int totalRequestsServiced;
     int totalCloudsQueued;
 
     int leaderAlgoInvoked;
@@ -78,7 +78,7 @@ public class Simulator implements Runnable {
         totalCloudsFormationTimeSelf = 0;
         totalCloudsFormedRSU = 0;
         totalCloudsFormationTimeRSU = 0;
-        totalCloudsRecycled = 0;
+        totalRequestsServiced = 0;
         totalCloudsQueued = 0;
         
         leaderChangeCount = 0;
@@ -141,8 +141,8 @@ public class Simulator implements Runnable {
         }
     }
 
-    public synchronized void incrTotalCloudsRecycled() {
-        totalCloudsRecycled++;
+    public synchronized void incrTotalRequestsServiced() {
+        totalRequestsServiced++;
     }
 
     public synchronized void incrLeaderChangeCount() {
@@ -180,7 +180,7 @@ public class Simulator implements Runnable {
         System.out.println("Average transmit time in ms = " + decimalFormat.format(((double) totalTransmitTime) / totalTransmittedCount));
         System.out.println("Average receive time in ms = " + decimalFormat.format(((double) totalReceiveTime) / totalReceivedCount));
     
-        double averageClusterOverhead = ((double) totalTransmittedCount) / (totalCloudsFormedSelf + totalCloudsFormedRSU + totalCloudsRecycled);
+        double averageClusterOverhead = ((double) totalTransmittedCount) / totalRequestsServiced;
         double averageCloudFormationTimeSelf = ((double) totalCloudsFormationTimeSelf) / totalCloudsFormedSelf;
         double averageCloudFormationTimeRSU = ((double) totalCloudsFormationTimeRSU) / totalCloudsFormedRSU;
         System.out.println();
@@ -189,7 +189,7 @@ public class Simulator implements Runnable {
         System.out.println("Average cloud formation time (ms) by RSU = " + decimalFormat.format(averageCloudFormationTimeRSU));
         System.out.println("Total clouds formed distributedly = " + totalCloudsFormedSelf);
         System.out.println("Average cloud formation time (ms) distributedly = " + decimalFormat.format(averageCloudFormationTimeSelf));
-        System.out.println("Total clouds recycled = " + totalCloudsRecycled);
+        System.out.println("Total requests serviced = " + totalRequestsServiced);
         System.out.println("Leader change count = " + leaderChangeCount);
         System.out.println("Leader leave count = " + leaderLeaveCount);
 
@@ -198,7 +198,7 @@ public class Simulator implements Runnable {
             vehiclesPerSegment,
             averageVehicleSpeed,
             packetStats.get(Config.PACKET_TYPE.RREQ).generatedCount + packetStats.get(Config.PACKET_TYPE.RJOIN).generatedCount,
-            totalCloudsFormedSelf + totalCloudsFormedRSU + totalCloudsRecycled,
+            totalRequestsServiced,
             totalCloudsQueued,
             decimalFormat.format(averageClusterOverhead),
             totalCloudsFormedRSU,

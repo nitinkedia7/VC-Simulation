@@ -9,6 +9,7 @@ public class Packet {
     double position;
     Cloud cloud;       
     int reqResources;
+    int offeredResources;
     Simulator simulatorRef;
     Map<Integer, Integer> workAssignment;
     int workDoneAmount;
