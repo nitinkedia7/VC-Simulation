@@ -74,9 +74,13 @@ public class RoadSideUnit implements Runnable {
 
     public void handleRPROBE(Packet probe) {
         Cloud cloud = clouds.get(probe.appId);
-        if (cloud != null && cloud.isCloudLeader(id)) {
-            // send RPRESENT
+        if (cloud == null) {
             Packet presentPacket = new Packet(simulatorRef, Config.PACKET_TYPE.RPRESENT, id, currentTime, probe.appId, probe.senderId, true);
+            transmitQueue.add(presentPacket);
+        }
+        else if (cloud.isCloudLeader(id)) {
+            // RSU replies as a leader since cloud formation has RREP's
+            Packet presentPacket = new Packet(simulatorRef, Config.PACKET_TYPE.RPRESENT, id, currentTime, probe.appId, probe.senderId, false);
             transmitQueue.add(presentPacket);
         }
     }

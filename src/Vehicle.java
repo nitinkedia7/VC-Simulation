@@ -236,7 +236,7 @@ public class Vehicle implements Runnable {
         Cloud cloud = clouds.get(probe.appId);
         if (cloud != null && cloud.isCloudLeader(id)) {
             // send RPRESENT
-            Packet presentPacket = new Packet(simulatorRef, Config.PACKET_TYPE.RPRESENT, id, currentTime, probe.appId, probe.senderId, true);
+            Packet presentPacket = new Packet(simulatorRef, Config.PACKET_TYPE.RPRESENT, id, currentTime, probe.appId, probe.senderId, false);
             transmitQueue.add(presentPacket);
             handleRPRESENT(presentPacket);
         }
@@ -244,8 +244,15 @@ public class Vehicle implements Runnable {
 
     public void handleRPRESENT(Packet packet) {
         if (!hasPendingRequest) return;
-        if (packet.appId == pendingAppId && packet.requestorId == id) {
-            hasPendingRequest = false;
+        if (!(packet.appId == pendingAppId && packet.requestorId == id)) return;
+
+        hasPendingRequest = false;
+        if (packet.rsuReplied) {
+            Packet rreqPacket = new Packet(simulatorRef, Config.PACKET_TYPE.RREQ, id, currentTime, speed * direction, pendingAppId, Config.MAX_RESOURCE_QUOTA);
+            transmitQueue.add(rreqPacket);
+            handleRREQ(rreqPacket);
+        }
+        else {
             Packet rjoinPacket = new Packet(simulatorRef, Config.PACKET_TYPE.RJOIN, id, currentTime, speed * direction, pendingAppId, Config.MAX_RESOURCE_QUOTA);
             transmitQueue.add(rjoinPacket);
             handleRJOIN(rjoinPacket);
@@ -262,11 +269,9 @@ public class Vehicle implements Runnable {
             if (!transmitQueue.isEmpty()) {
                 if (backoffTime == 0) {
                     if (targetChannel.isFree(id, position)) {
-                        int transmittedCount = 0;
-                        while (!transmitQueue.isEmpty() && transmittedCount < 1) {
+                        while (!transmitQueue.isEmpty()) {
                             Packet packet = transmitQueue.poll();
                             targetChannel.transmitPacket(packet, currentTime, position);
-                            transmittedCount++;
                         }        
                         targetChannel.stopTransmit(id);
                         // Reset contention window

@@ -49,6 +49,7 @@ public class Simulator implements Runnable {
     int totalCloudsFormedRSU;
     long totalCloudsFormationTimeRSU;
     int totalCloudsRecycled;
+    int totalCloudsQueued;
 
     int leaderAlgoInvoked;
     int leaderChangeCount;
@@ -78,6 +79,7 @@ public class Simulator implements Runnable {
         totalCloudsFormedRSU = 0;
         totalCloudsFormationTimeRSU = 0;
         totalCloudsRecycled = 0;
+        totalCloudsQueued = 0;
         
         leaderChangeCount = 0;
         leaderLeaveCount = 0;
@@ -91,13 +93,15 @@ public class Simulator implements Runnable {
 
         // Spawn RSU's in the mid of each (implicit) segment
         roadSideUnits = new ArrayList<RoadSideUnit>();
-        // double rsuPosition = Config.SEGMENT_LENGTH * 0.5;
-        // int rsuId = 1;
-        // while (rsuPosition < Config.ROAD_END) {
-        //     roadSideUnits.add(new RoadSideUnit(-1 * rsuId, rsuPosition, timeSync, this, medium, stopTime));
-        //     rsuPosition += Config.SEGMENT_LENGTH;
-        //     rsuId++;
-        // }
+        double rsuPosition = Config.SEGMENT_LENGTH * 0.5;
+        int rsuId = 1;
+        while (rsuPosition < Config.ROAD_END) {
+            if (rsuId % 2 == 1) { // Position RSU's at alternate segments
+                roadSideUnits.add(new RoadSideUnit(-1 * rsuId, rsuPosition, timeSync, this, medium, stopTime));
+            }
+            rsuPosition += Config.SEGMENT_LENGTH;
+            rsuId++;
+        }
         System.out.println("Simulation Initialised");    
     }
 
@@ -125,6 +129,15 @@ public class Simulator implements Runnable {
         else {
             totalCloudsFormedSelf++;
             totalCloudsFormationTimeSelf += formationTime;
+        }
+    }
+
+    public synchronized void changeRequestQueuedCount(boolean incr) {
+        if (incr) {
+            totalCloudsQueued++;
+        }
+        else {
+            totalCloudsQueued--;
         }
     }
 
@@ -181,15 +194,18 @@ public class Simulator implements Runnable {
         System.out.println("Leader leave count = " + leaderLeaveCount);
 
         String csvRow = String.format(
-            "%d,%d,%s,%s,%s,%d,%d,%d\n",
+            "%d,%d,%d,%d,%d,%s,%d,%s,%d,%s,%d\n",
             vehiclesPerSegment,
             averageVehicleSpeed,
+            packetStats.get(Config.PACKET_TYPE.RREQ).generatedCount + packetStats.get(Config.PACKET_TYPE.RJOIN).generatedCount,
+            totalCloudsFormedSelf + totalCloudsFormedRSU + totalCloudsRecycled,
+            totalCloudsQueued,
             decimalFormat.format(averageClusterOverhead),
+            totalCloudsFormedRSU,
             decimalFormat.format(averageCloudFormationTimeRSU),
+            totalCloudsFormedSelf,
             decimalFormat.format(averageCloudFormationTimeSelf),
-            leaderChangeCount,
-            leaderLeaveCount,
-            leaderAlgoInvoked
+            leaderChangeCount
         );
         try {
             csvFileWriter.write(csvRow);
@@ -197,6 +213,14 @@ public class Simulator implements Runnable {
         } catch (IOException ioe) {
             System.err.println("IOException: " + ioe.getMessage());
         } 
+
+        System.err.printf(
+            "Simulation with density %d and average speed %d km/h finished. Leader changed %d times out of %d times leader left.\n",
+            vehiclesPerSegment,
+            averageVehicleSpeed,
+            leaderChangeCount,
+            leaderLeaveCount
+        );
     }
 
     public void run() {
@@ -226,11 +250,11 @@ public class Simulator implements Runnable {
 
             PrintStream console = System.out;
             FileWriter fw = new FileWriter(logDirectoryPath + "/plot.csv", true);
-            fw.write("Average Vehicle Density,Average Vehicle Speed (km/h),Average Cluster Overhead (Ratio),Average Cloud Formation Time by RSU (ms),Average Cloud Formation Time Distributedly (ms),Leader Change Count,Leader Leave Count,Leader Algo Invoked\n");
+            fw.write("Average Vehicle Density,Average Vehicle Speed (km/h),Total Requests Generated,Total Requests Serviced,Total Requests Queued,Average Cluster Overhead (Ratio),Clouds formed by RSU,Average Cloud Formation Time by RSU (ms),Clouds formed Distributedly,Average Cloud Formation Time Distributedly (ms),Leader Change Count\n");
             fw.flush();
 
             int avgVehicleSpeedKMPH = 60;
-            for (int vehiclesPerSegment = 24; vehiclesPerSegment <= 24; vehiclesPerSegment += 4) {
+            for (int vehiclesPerSegment = 8; vehiclesPerSegment <= 32; vehiclesPerSegment += 8) {
                 try {
                     String logFilePath = String.format("%s/%d_%d.log", logDirectoryPath, vehiclesPerSegment, avgVehicleSpeedKMPH);
                     PrintStream logFile = new PrintStream(new File(logFilePath));

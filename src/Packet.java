@@ -13,6 +13,7 @@ public class Packet {
     Map<Integer, Integer> workAssignment;
     int workDoneAmount;
     int requestorId;
+    boolean rsuReplied;
 
     // Default constructor, suffices for RLEAVE, RTEAR, RPROBE
     public Packet(Simulator simulatorRef, Config.PACKET_TYPE type, int senderId, int genTime, int appId) {
@@ -25,7 +26,7 @@ public class Packet {
         // System.out.println("Packet " + ": Sender " + senderId + " generated " + type + " at " + genTime);
     }
 
-    // Constructor for RREQ
+    // Constructor for RREQ / RJOIN
     public Packet(Simulator simulatorRef, Config.PACKET_TYPE type, int senderId, int genTime, double velocity, int appId, int reqResources) {
         this(simulatorRef, type, senderId, genTime, appId);
         assert (type == Config.PACKET_TYPE.RREQ || type == Config.PACKET_TYPE.RJOIN) : "Packet constructor type mismatch";
@@ -61,11 +62,12 @@ public class Packet {
         this.workDoneAmount = workDoneAmount;
     }
 
-    // Constructor for RQUEUE
-    public Packet(Simulator simulatorRef, Config.PACKET_TYPE type, int senderId, int genTime, int appId, int requestorId, boolean orderTaken) {
+    // Constructor for RPRESENT
+    public Packet(Simulator simulatorRef, Config.PACKET_TYPE type, int senderId, int genTime, int appId, int requestorId, boolean rsuReplied) {
         this(simulatorRef, type, senderId, genTime, appId);
         assert (type == Config.PACKET_TYPE.RPRESENT) : "Packet constructor type mismatch";
         this.requestorId = requestorId;
+        this.rsuReplied = rsuReplied;
     }
 
     public void recordTransmission(int currentTime, double currentPosition) {

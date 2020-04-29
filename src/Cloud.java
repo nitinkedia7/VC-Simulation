@@ -220,12 +220,14 @@ public class Cloud {
     }
 
     public void queueRequestPacket(Packet packet) {
+        simulatorRef.changeRequestQueuedCount(true);
         pendingRequests.add(packet);
     }
 
     public boolean processPendingRequest(int currentTime) {
         if (pendingRequests.isEmpty()) return false;
         Packet reqPacket = pendingRequests.poll();
+        simulatorRef.changeRequestQueuedCount(false);
         addRequestor(reqPacket);
         assignWork();
         this.resourceQuotaMetTime = currentTime;
