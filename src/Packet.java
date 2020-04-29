@@ -11,10 +11,11 @@ public class Packet {
     int reqResources;
     int offeredResources;
     Simulator simulatorRef;
-    Map<Integer, Integer> workAssignment;
+    Map<Integer, Map<Integer, Integer>> workAssignment;
     int workDoneAmount;
     int requestorId;
     boolean rsuReplied;
+    int reqId;
 
     // Default constructor, suffices for RLEAVE, RTEAR, RPROBE
     public Packet(Simulator simulatorRef, Config.PACKET_TYPE type, int senderId, int genTime, int appId) {
@@ -28,18 +29,20 @@ public class Packet {
     }
 
     // Constructor for RREQ / RJOIN
-    public Packet(Simulator simulatorRef, Config.PACKET_TYPE type, int senderId, int genTime, double velocity, int appId, int reqResources) {
+    public Packet(Simulator simulatorRef, Config.PACKET_TYPE type, int senderId, int genTime, double velocity, int appId, int reqResources, int offeredResources) {
         this(simulatorRef, type, senderId, genTime, appId);
         assert (type == Config.PACKET_TYPE.RREQ || type == Config.PACKET_TYPE.RJOIN) : "Packet constructor type mismatch";
-        this.reqResources = reqResources;
         this.velocity = velocity;
+        this.reqResources = reqResources;
+        this.offeredResources = offeredResources;
     }
 
     // Constructor for RREP
-    public Packet(Simulator simulatorRef, Config.PACKET_TYPE type, int senderId, int genTime, double velocity, int appId) {
+    public Packet(Simulator simulatorRef, Config.PACKET_TYPE type, int senderId, int genTime, double velocity, int appId, int offeredResources) {
         this(simulatorRef, type, senderId, genTime, appId);
         assert (type == Config.PACKET_TYPE.RREP) : "Packet constructor type mismatch";
         this.velocity = velocity;
+        this.offeredResources = offeredResources;
     }
 
     // Constructor for RACK
@@ -50,17 +53,18 @@ public class Packet {
     }
 
     // Constructor for PSTART
-    public Packet(Simulator simulatorRef, Config.PACKET_TYPE type, int senderId, int genTime, int appId, Map<Integer, Integer> workAssignment) {
+    public Packet(Simulator simulatorRef, Config.PACKET_TYPE type, int senderId, int genTime, int appId, Map<Integer, Map<Integer, Integer>> workAssignment) {
         this(simulatorRef, type, senderId, genTime, appId);
         assert (type == Config.PACKET_TYPE.PSTART) : "Packet constructor type mismatch";
         this.workAssignment = workAssignment;
     }
 
     // Constructor for PDONE
-    public Packet(Simulator simulatorRef, Config.PACKET_TYPE type, int senderId, int genTime, int appId, int workDoneAmount) {
+    public Packet(Simulator simulatorRef, Config.PACKET_TYPE type, int senderId, int genTime, int appId, int workDoneAmount, int reqId) {
         this(simulatorRef, type, senderId, genTime, appId);
         assert (type == Config.PACKET_TYPE.PDONE) : "Packet constructor type mismatch";
         this.workDoneAmount = workDoneAmount;
+        this.reqId = reqId;
     }
 
     // Constructor for RPRESENT

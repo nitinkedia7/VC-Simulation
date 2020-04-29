@@ -56,12 +56,13 @@ public class Cloud {
         }
     }
 
-    public Cloud(Simulator simulatorRef, int appId, int parentId, boolean formedByRSU) {
+    public Cloud(Simulator simulatorRef, int appId, int parentId, boolean formedByRSU, int initialRequestTime) {
         this.appId = appId;
         this.currentLeaderId = parentId;
         this.simulatorRef = simulatorRef;
         this.formedByRSU = formedByRSU;
         this.requestIdCounter = 0;
+        this.initialRequestTime = initialRequestTime; 
         this.resourceQuotaMetTime = Integer.MAX_VALUE;
         this.globalWorkStore = new HashMap<Integer, Map<Integer,Integer>>();
         this.pendingRequests = new LinkedList<>();
@@ -138,14 +139,24 @@ public class Cloud {
         return;
     }
 
-    public Map<Integer, Map<Integer,Integer>> getWorkAssignment(int reqId) {
-        Map<Integer, Integer> workAssignment = new HashMap<Integer,Integer>();
-        globalWorkStore.get(reqId).forEach((workerId, work) -> {
-            workAssignment.put(workerId, work);
-        });
-        Map<Integer, Map<Integer,Integer>> globalWorkStoreCopy = new HashMap<Integer, Map<Integer,Integer>>();
-        globalWorkStoreCopy.put(reqId, workAssignment);
-        return globalWorkStoreCopy;
+    // public Map<Integer, Map<Integer,Integer>> getWorkAssignment(int reqId) {
+    //     Map<Integer, Integer> workAssignment = new HashMap<Integer,Integer>();
+    //     globalWorkStore.get(reqId).forEach((workerId, work) -> {
+    //         workAssignment.put(workerId, work);
+    //     });
+    //     Map<Integer, Map<Integer,Integer>> globalWorkStoreCopy = new HashMap<Integer, Map<Integer,Integer>>();
+    //     globalWorkStoreCopy.put(reqId, workAssignment);
+    //     return globalWorkStoreCopy;
+    // }
+
+    private void replenishResource(int id, int replenishAmount) {
+        assert(isMember(id));
+        int freeResource = freeResourcesMap.get(id);
+        boolean removed = freeResourcesSet.remove(new Pair(freeResource, id));
+        assert(removed == true);
+        freeResourcesSet.add(new Pair(freeResource + replenishAmount, id));
+        freeResourcesMap.replace(id, freeResource + replenishAmount);
+        return;
     }
 
     public void markAsDone(int reqId, int workerId, int workDoneAmount) {
@@ -154,15 +165,15 @@ public class Cloud {
         if (!workAssignment.containsKey(workerId)) return;
 
         int workAllocated = workAssignment.get(workerId);
-        workAllocated = Math.max(0, workAllocated - workDoneAmount);
         assert(workAllocated >= workDoneAmount);
-        if (workAllocated == 0) {
+        workDoneAmount = Math.min(workDoneAmount, workAllocated);
+        if (workAllocated - workDoneAmount == 0) {
             workAssignment.remove(workerId);
         }
         else {
-            workAssignment.replace(workerId, workAllocated);
+            workAssignment.replace(workerId, workAllocated - workDoneAmount);
         }
-
+        replenishResource(workerId, workDoneAmount);
         if (globalWorkStore.get(reqId).isEmpty()) {
             this.simulatorRef.incrTotalRequestsServiced();
         }

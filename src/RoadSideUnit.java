@@ -40,11 +40,11 @@ public class RoadSideUnit implements Runnable {
     public void handleRREQ(Packet reqPacket) {
         Cloud cloud = clouds.get(reqPacket.appId);
         if (cloud == null) { // RSU starts making a cloud
-            clouds.put(reqPacket.appId, new Cloud(simulatorRef, reqPacket.appId, id, true));
-            clouds.get(reqPacket.appId).addRequestor(reqPacket);
+            clouds.put(reqPacket.appId, new Cloud(simulatorRef, reqPacket.appId, id, true, reqPacket.genTime));
+            clouds.get(reqPacket.appId).addNewRequest(reqPacket);
         }
         else if (cloud.isCloudLeader(id)) {
-            cloud.queueRequestPacket(reqPacket);
+            cloud.addNewRequest(reqPacket);
         }
     }
 
@@ -52,7 +52,7 @@ public class RoadSideUnit implements Runnable {
         // If this vehicle is the leader then it enqueues it
         Cloud cloud = clouds.get(p.appId);
         if (cloud != null && cloud.isCloudLeader(id)) {
-            cloud.queueRequestPacket(p);
+            cloud.addNewRequest(p);
         }
     }
 
@@ -65,7 +65,7 @@ public class RoadSideUnit implements Runnable {
         if (!cloud.isCloudLeader(id)) {
             return;
         }
-        cloud.addMember(donorPacket);
+        cloud.addMember(donorPacket.senderId, donorPacket.offeredResources, donorPacket.velocity);
         if (cloud.justMetResourceQuota()) {
             cloud.electLeader();
             transmitQueue.add(new Packet(simulatorRef, Config.PACKET_TYPE.RACK, id, currentTime, donorPacket.appId, cloud));
