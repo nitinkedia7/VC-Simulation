@@ -169,7 +169,7 @@ public class Vehicle implements Runnable {
         clouds.put(ackPacket.appId, cloud);
         if (cloud != null && cloud.isCloudLeader(id)) {
             cloud.recordCloudFormed(currentTime);
-            cloud.printStats();
+            // cloud.printStats();
             Map<Integer, Map<Integer,Integer>> workAssignment = cloud.processPendingRequests();
             Packet pstartPacket = new Packet(simulatorRef, Config.PACKET_TYPE.PSTART, id, currentTime, cloud.appId, workAssignment);
             transmitQueue.add(pstartPacket);
@@ -220,8 +220,7 @@ public class Vehicle implements Runnable {
     }
 
     public void selfInitiateCloudFormation() {
-        System.out.println("Vehicle " + id + " self-initiating cloud formation for appId " + pendingAppId);
-
+        // System.out.println("Vehicle " + id + " self-initiating cloud formation for appId " + pendingAppId);
         // Ensure that no cloud this appId exists till now
         Cloud cloud = clouds.get(pendingAppId);
         if (cloud != null) {
@@ -270,37 +269,41 @@ public class Vehicle implements Runnable {
             if (currentTime % 50 == 0) updatePosition();
             Channel targetChannel = mediumRef.channels[channelId];
 
-            // Attempt to transmit packets in transmitQueue only if there are any pending packets
             if (!transmitQueue.isEmpty()) {
-                if (backoffTime == 0) {
-                    if (targetChannel.isFree(id, position)) {
-                        while (!transmitQueue.isEmpty()) {
-                            Packet packet = transmitQueue.poll();
-                            targetChannel.transmitPacket(packet, currentTime, position);
-                        }        
-                        targetChannel.stopTransmit(id);
-                        // Reset contention window
-                        contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
-                    }
-                    else {
-                        contentionWindowSize *= 2;
-                        if (contentionWindowSize > Config.CONTENTION_WINDOW_MAX) {
-                            System.out.println("Vehicle could not transmit in backoff, retrying again");
-                            backoffTime = 0;
-                            contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
-                        }
-                        else {
-                            backoffTime = ThreadLocalRandom.current().nextInt(contentionWindowSize) + 1;
-                        }
-                    }
+                if (targetChannel.isFree(id, position)) {
+                    Packet packet = transmitQueue.poll();
+                    targetChannel.transmitPacket(packet, currentTime, position);    
                 }
-                else {
-                    if (targetChannel.isFree(id, position)) {
-                        backoffTime--;
-                        targetChannel.stopTransmit(id);
-                    }
-                }
-            }            
+            }
+            // Attempt to transmit packets in transmitQueue only if there are any pending packets
+            // if (!transmitQueue.isEmpty()) {
+            //     if (backoffTime == 0) {
+            //         if (targetChannel.isFree(id, position)) {
+            //             Packet packet = transmitQueue.poll();
+            //             targetChannel.transmitPacket(packet, currentTime, position);    
+            //             targetChannel.stopTransmit(id);
+            //             // Reset contention window
+            //             contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
+            //         }
+            //         else {
+            //             contentionWindowSize *= 2;
+            //             if (contentionWindowSize > Config.CONTENTION_WINDOW_MAX) {
+            //                 System.out.println("Vehicle could not transmit in backoff, retrying again");
+            //                 backoffTime = 0;
+            //                 contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
+            //             }
+            //             else {
+            //                 backoffTime = ThreadLocalRandom.current().nextInt(contentionWindowSize) + 1;
+            //             }
+            //         }
+            //     }
+            //     else {
+            //         if (targetChannel.isFree(id, position)) {
+            //             backoffTime--;
+            //             targetChannel.stopTransmit(id);
+            //         }
+            //     }
+            // }            
             // Put processed work done (if any) to transmitQueue
             while (!processQueue.isEmpty()) {
                 ProcessBlock nextBlock = processQueue.peek();
@@ -390,6 +393,7 @@ public class Vehicle implements Runnable {
                         break;
                 }
             }
+            timeSync.arriveAndAwaitAdvance();
             timeSync.arriveAndAwaitAdvance();
             currentTime++;
         }

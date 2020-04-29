@@ -181,28 +181,27 @@ public class Cloud {
     }
 
     public void markAsDone(int reqId, int workerId, int workDoneAmount) {
-        System.out.println("Worker " + workerId + " submits " + workDoneAmount + " work for request id " + reqId);
+        // System.out.println("Worker " + workerId + " submits " + workDoneAmount + " work for request id " + reqId);
         if (!globalWorkStore.containsKey(reqId)) {
-            System.out.println("Worker " + workerId + " illegal reqId " + workDoneAmount + " work for request id " + reqId);
+            // System.out.println("Worker " + workerId + " illegal reqId " + workDoneAmount + " work for request id " + reqId);
             return;
         }
         Map<Integer,Integer> workAssignment = globalWorkStore.get(reqId);
         if (!workAssignment.containsKey(workerId)) {
-            printFreeResourceMap(workAssignment);
-            System.out.println("Worker " + workerId + " illegal worker " + workDoneAmount + " work for request id " + reqId);
+            // printFreeResourceMap(workAssignment);
+            // System.out.println("Worker " + workerId + " illegal worker " + workDoneAmount + " work for request id " + reqId);
             return;
         }
-
         int workAllocated = workAssignment.get(workerId);
         assert(workAllocated >= workDoneAmount);
         workDoneAmount = Math.min(workDoneAmount, workAllocated);
         if (workAllocated - workDoneAmount == 0) {
             workAssignment.remove(workerId);
-            System.out.println("Worker " + workerId + " has done " + workDoneAmount + " work for request id " + reqId + " and deleted, remaining " + workAssignment.size());
+            // System.out.println("Worker " + workerId + " has done " + workDoneAmount + " work for request id " + reqId + " and deleted, remaining " + workAssignment.size());
         }
         else {
             workAssignment.replace(workerId, workAllocated - workDoneAmount);
-            System.out.println("Worker " + workerId + " has done " + workDoneAmount + " work for request id " + reqId + " out of " + workAllocated + ", remaining " + workAssignment.size());
+            // System.out.println("Worker " + workerId + " has done " + workDoneAmount + " work for request id " + reqId + " out of " + workAllocated + ", remaining " + workAssignment.size());
         }
         replenishResource(workerId, workDoneAmount);
         if (globalWorkStore.get(reqId).isEmpty()) {
@@ -229,11 +228,11 @@ public class Cloud {
 
     public Map<Integer, Map<Integer,Integer>> reassignWork(int id) {
         Map<Integer, Map<Integer,Integer>> complementWorkStore = new HashMap<Integer, Map<Integer,Integer>>();
-        // Delete the member
         if (!isMember(id)) {
-            System.out.println(id + " is not a member of cloud " + appId);
+            // System.out.println(id + " is not a member of cloud " + appId);
             return complementWorkStore;
         }
+        // Delete the member
         int resourceProvided = freeResourcesMap.get(id);
         if (resourceProvided > 0) {
             boolean removed = freeResourcesSet.remove(new Pair(resourceProvided, id));

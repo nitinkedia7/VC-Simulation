@@ -64,7 +64,7 @@ public class Simulator implements Runnable {
         averageVehicleSpeed = givenAverageVehicleSpeed;
         timeSync = new Phaser();
         timeSync.register();
-        medium = new Medium();
+        medium = new Medium(stopTime, timeSync);
         decimalFormat = new DecimalFormat();
         decimalFormat.setMaximumFractionDigits(3);
         csvFileWriter = fw;
@@ -227,6 +227,7 @@ public class Simulator implements Runnable {
     }
 
     public void run() {
+        new Thread(medium.getChannel(0)).start();
         for (RoadSideUnit rsu : roadSideUnits) {
             new Thread(rsu).start();
         }
@@ -235,6 +236,7 @@ public class Simulator implements Runnable {
         }
         while (currentTime <= stopTime) {
             System.out.println("Interval " + currentTime);
+            timeSync.arriveAndAwaitAdvance();
             timeSync.arriveAndAwaitAdvance();
             currentTime++;
         }
@@ -257,7 +259,7 @@ public class Simulator implements Runnable {
             fw.flush();
 
             int avgVehicleSpeedKMPH = 60;
-            for (int vehiclesPerSegment = 16; vehiclesPerSegment <= 16; vehiclesPerSegment += 8) {
+            for (int vehiclesPerSegment = 24; vehiclesPerSegment <= 24; vehiclesPerSegment += 8) {
                 try {
                     String logFilePath = String.format("%s/%d_%d.log", logDirectoryPath, vehiclesPerSegment, avgVehicleSpeedKMPH);
                     PrintStream logFile = new PrintStream(new File(logFilePath));

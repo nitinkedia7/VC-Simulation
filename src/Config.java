@@ -17,12 +17,12 @@ public class Config {
     static int STOP_TIME = 30000;
     // A vehicle stays in a segment for a minimum of 24 s,
     // as given by segment length (600 m) / max speed (25 m/s).
-    static int MAX_RESOURCE_QUOTA = 1000; // should in order of seconds
+    static int MAX_RESOURCE_QUOTA = 2000; // should in order of seconds
     static int WORK_CHUNK_SIZE = 250;
     static int PROCESSING_SPEED = 1;
     
     static int INV_RREQ_PROB = 2000;
-    static int TOTAL_CHANNEL_COUNT = 5;
+    static int TOTAL_CHANNEL_COUNT = 1;
     static int CONTENTION_WINDOW_BASE = 1;
     static int CONTENTION_WINDOW_MAX = 1024;
     

@@ -1,8 +1,12 @@
 import java.util.*;
 import java.util.concurrent.locks.*;
+import java.util.concurrent.Phaser;
 
-public class Channel {
+public class Channel implements Runnable {
     int id;
+    int currentTime;
+    int stopTime;
+    Phaser timeSync;
     List<Packet> packetQueue;
     ReadWriteLock packetQueueLock;
 
@@ -19,12 +23,16 @@ public class Channel {
     List<Transmitter> transmitterPositions;
     Lock transmitterPositionsLock;
     
-    public Channel(int id) {
+    public Channel(int id, int stopTime, Phaser timeSync) {
         this.id = id;
+        this.currentTime = 0;
+        this.stopTime = stopTime;
+        this.timeSync = timeSync;
+        timeSync.register();
         packetQueue = new ArrayList<Packet>();
         packetQueueLock = new ReentrantReadWriteLock(Config.useFair);
         transmitterPositions = new LinkedList<Transmitter>();
-        transmitterPositionsLock = new ReentrantLock();
+        transmitterPositionsLock = new ReentrantLock(Config.useFair);
     }
 
     public boolean isFree(int id, double position) {
@@ -42,17 +50,17 @@ public class Channel {
         return true;
     }
 
-    public void stopTransmit(int id) {
-        transmitterPositionsLock.lock();
-        Iterator<Transmitter> iterator = transmitterPositions.iterator();
-        while (iterator.hasNext()) {
-            Transmitter transmitter = iterator.next();
-            if (transmitter.id == id) {
-                iterator.remove();
-            }
-        }
-        transmitterPositionsLock.unlock();
-    }
+    // public void stopTransmit(int id) {
+    //     transmitterPositionsLock.lock();
+    //     Iterator<Transmitter> iterator = transmitterPositions.iterator();
+    //     while (iterator.hasNext()) {
+    //         Transmitter transmitter = iterator.next();
+    //         if (transmitter.id == id) {
+    //             iterator.remove();
+    //         }
+    //     }
+    //     transmitterPositionsLock.unlock();
+    // }
 
     public void transmitPacket(Packet packet, int currentTime, double currentPosition) {
         packetQueueLock.writeLock().lock();
@@ -80,5 +88,24 @@ public class Channel {
         }
         packetQueueLock.readLock().unlock();
         return newPacketCount;
+    }
+
+    private void cleanup() {
+        transmitterPositionsLock.lock();
+        // System.err.println("Interval " + currentTime + ": transmitter positions: "); 
+        // for (Transmitter t : transmitterPositions) {
+        //     System.err.println(t.id + "," + t.position + " "); 
+        // }
+        transmitterPositions.clear();
+        transmitterPositionsLock.unlock();
+    }
+
+    public void run() {
+        while (currentTime <= stopTime) {
+            timeSync.arriveAndAwaitAdvance();
+            cleanup();
+            timeSync.arriveAndAwaitAdvance();
+            currentTime++;
+        }
     }
 }
