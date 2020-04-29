@@ -13,7 +13,7 @@ public class Config {
     }
     static int PACKET_TYPE_COUNT = 8;
     static boolean useFair = true;
-    static int APPLICATION_TYPE_COUNT = 5;
+    static int APPLICATION_TYPE_COUNT = 1;
     static int TRY_LOCK_WAIT_TIME = 100;
     static int STOP_TIME = 30000;
     // A vehicle stays in a segment for a minimum of 24 s,

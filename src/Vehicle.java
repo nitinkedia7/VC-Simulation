@@ -162,6 +162,7 @@ public class Vehicle implements Runnable {
         clouds.put(ackPacket.appId, cloud);
         if (cloud != null && cloud.isCloudLeader(id)) {
             cloud.recordCloudFormed(currentTime);
+            cloud.printStats();
             Map<Integer, Map<Integer,Integer>> workAssignment = cloud.processPendingRequests();
             Packet pstartPacket = new Packet(simulatorRef, Config.PACKET_TYPE.PSTART, id, currentTime, cloud.appId, workAssignment);
             transmitQueue.add(pstartPacket);
@@ -170,8 +171,8 @@ public class Vehicle implements Runnable {
     }
     
     public void handlePSTART(Packet startPacket) {
-        startPacket.workAssignment.forEach((reqId, workAssignment) -> {
-            int assignedWork = workAssignment.getOrDefault(id, 0);
+        startPacket.workAssignment.forEach((reqId, appWorkAssignment) -> {
+            int assignedWork = appWorkAssignment.getOrDefault(id, 0);
             if (assignedWork > 0) {
                 // Add an alarm for contribution
                 processQueue.add(new ProcessBlock(startPacket.appId, reqId, assignedWork));
@@ -190,10 +191,6 @@ public class Vehicle implements Runnable {
             Packet pstartPacket = new Packet(simulatorRef, Config.PACKET_TYPE.PSTART, id, currentTime, cloud.appId, newWorkStore);
             transmitQueue.add(pstartPacket);
             handlePSTART(pstartPacket);
-        }
-        else {
-            transmitQueue.add(new Packet(simulatorRef, Config.PACKET_TYPE.RTEAR, id, currentTime, donePacket.appId));
-            clouds.remove(donePacket.appId);
         }
     }
 
@@ -325,7 +322,7 @@ public class Vehicle implements Runnable {
                 int appId = ThreadLocalRandom.current().nextInt(Config.APPLICATION_TYPE_COUNT);
                 if (hasRequest == 1) {
                     if (clouds.get(appId) != null) {
-                        Packet rjoinPacket = new Packet(simulatorRef, Config.PACKET_TYPE.RJOIN, id, currentTime, speed * direction, appId, Config.MAX_RESOURCE_QUOTA);
+                        Packet rjoinPacket = new Packet(simulatorRef, Config.PACKET_TYPE.RJOIN, id, currentTime, speed * direction, appId, Config.MAX_RESOURCE_QUOTA, Config.WORK_CHUNK_SIZE);
                         transmitQueue.add(rjoinPacket);
                         handleRJOIN(rjoinPacket);
                     }

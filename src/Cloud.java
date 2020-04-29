@@ -31,6 +31,18 @@ public class Cloud {
             first = a;
             second = b;
         }
+
+        @Override
+        public boolean equals(Object p) {
+            System.out.println("In equals");
+            if (p instanceof Pair) {
+                Pair pp = (Pair) p;
+                return pp.first == first && pp.second == second;
+            }
+            else {
+                return false;
+            }
+        }
     }
     TreeSet<Pair> freeResourcesSet;
     Map<Integer,Integer> freeResourcesMap; // Acts as member list
@@ -50,9 +62,9 @@ public class Cloud {
     List<Leader> futureLeaders;
     class SortByLQI implements Comparator<Leader> {
         public int compare(Leader x, Leader y) {
-            if (x.LQI < y.LQI) return 1;
+            if (x.LQI < y.LQI) return -1;
             else if (x.LQI == y.LQI) return 0;
-            return -1;    
+            return 1;    
         }
     }
 
@@ -70,14 +82,12 @@ public class Cloud {
             @Override
             public int compare(Pair x, Pair y) {
                 if (x.first == y.first) {
-                    if (x.second == y.second) {
-                        return 1;
-                    }
-                    return y.second - x.second; 
+                    return x.second - y.second;
                 }
-                else {
-                    return y.first - x.first;
+                else if (x.first < y.first) {
+                    return 1;
                 }
+                else return -1;
             }
         });
         this.freeResourcesMap = new HashMap<Integer,Integer>();
@@ -105,6 +115,7 @@ public class Cloud {
 
     private Map<Integer,Integer> allocateResource(int resourcesNeeded) {
         assert(resourcesNeeded >= 0);
+        assert(resourcesNeeded <= totalFreeResource);
         int allocatedResources = 0;
         Map<Integer,Integer> workAssignment = new HashMap<Integer, Integer>();
         while (allocatedResources < resourcesNeeded) {
@@ -124,54 +135,60 @@ public class Cloud {
                 totalFreeResource -= p.first;
             }
         }
+        assert(allocatedResources == resourcesNeeded);
         return workAssignment;
     } 
 
     public void addNewRequest(Packet reqPacket) {
         assert(reqPacket.appId == appId);
-        int id = reqPacket.senderId;
+        int requestorId = reqPacket.senderId;
         int resourcesNeeded = reqPacket.reqResources;
-        int reqId = requestIdCounter++;
+        int requestId = requestIdCounter;
+        requestIdCounter++;
         // Add to pending request queue
-        pendingRequests.add(new Request(reqId, id, resourcesNeeded));
+        pendingRequests.add(new Request(requestId, requestorId, resourcesNeeded));
+        simulatorRef.changeTotalRequestsQueued(true);
         // Also add as an member
-        addMember(id, reqPacket.offeredResources, reqPacket.velocity);
+        addMember(requestorId, reqPacket.offeredResources, reqPacket.velocity);
         return;
     }
-
-    // public Map<Integer, Map<Integer,Integer>> getWorkAssignment(int reqId) {
-    //     Map<Integer, Integer> workAssignment = new HashMap<Integer,Integer>();
-    //     globalWorkStore.get(reqId).forEach((workerId, work) -> {
-    //         workAssignment.put(workerId, work);
-    //     });
-    //     Map<Integer, Map<Integer,Integer>> globalWorkStoreCopy = new HashMap<Integer, Map<Integer,Integer>>();
-    //     globalWorkStoreCopy.put(reqId, workAssignment);
-    //     return globalWorkStoreCopy;
-    // }
 
     private void replenishResource(int id, int replenishAmount) {
         assert(isMember(id));
         int freeResource = freeResourcesMap.get(id);
-        boolean removed = freeResourcesSet.remove(new Pair(freeResource, id));
-        assert(removed == true);
+        if (freeResource > 0) {
+            boolean removed = freeResourcesSet.remove(new Pair(freeResource, id));
+            assert(removed == true);
+        }
         freeResourcesSet.add(new Pair(freeResource + replenishAmount, id));
         freeResourcesMap.replace(id, freeResource + replenishAmount);
+        totalFreeResource += replenishAmount;
         return;
     }
 
     public void markAsDone(int reqId, int workerId, int workDoneAmount) {
-        if (!globalWorkStore.containsKey(reqId)) return;
+        System.out.println("Worker " + workerId + " submits " + workDoneAmount + " work for request id " + reqId);
+        if (!globalWorkStore.containsKey(reqId)) {
+            System.out.println("Worker " + workerId + " illegal reqId " + workDoneAmount + " work for request id " + reqId);
+            return;
+        }
         Map<Integer,Integer> workAssignment = globalWorkStore.get(reqId);
-        if (!workAssignment.containsKey(workerId)) return;
+        if (!workAssignment.containsKey(workerId)) {
+            printFreeResourceMap(workAssignment);
+            System.out.println("Worker " + workerId + " illegal worker " + workDoneAmount + " work for request id " + reqId);
+            return;
+        }
 
         int workAllocated = workAssignment.get(workerId);
         assert(workAllocated >= workDoneAmount);
         workDoneAmount = Math.min(workDoneAmount, workAllocated);
         if (workAllocated - workDoneAmount == 0) {
             workAssignment.remove(workerId);
+            System.out.println("Worker " + workerId + " has done " + workDoneAmount + " work for request id " + reqId + " and deleted, remaining " + workAssignment.size());
         }
         else {
             workAssignment.replace(workerId, workAllocated - workDoneAmount);
+            System.out.println("Worker " + workerId + " has done " + workDoneAmount + " work for request id " + reqId + " out of " + workAllocated + ", remaining " + workAssignment.size());
         }
         replenishResource(workerId, workDoneAmount);
         if (globalWorkStore.get(reqId).isEmpty()) {
@@ -180,12 +197,39 @@ public class Cloud {
         return;
     }
 
+    private void printFreeResourceMap(Map<Integer,Integer> map) {
+        String message = "Map of size " + map.size() + ": ";
+        for (Map.Entry<Integer, Integer> entry : map.entrySet()) {
+            message += (entry.getKey() + "(" + entry.getValue() + ") "); 
+        }
+        System.out.println(message);
+    }
+
+    private void printFreeResourceSet() {
+        String message = "Set of size " + freeResourcesSet.size() + ": ";
+        for (Pair p : freeResourcesSet) {
+            message += (p.second + "(" + p.first + ") "); 
+        }
+        System.out.println(message);
+    }
+
     public Map<Integer, Map<Integer,Integer>> reassignWork(int id) {
+        Map<Integer, Map<Integer,Integer>> complementWorkStore = new HashMap<Integer, Map<Integer,Integer>>();
         // Delete the member
-        if (!isMember(id)) return null;
+        if (!isMember(id)) {
+            System.out.println(id + " is not a member of cloud " + appId);
+            return complementWorkStore;
+        }
         int resourceProvided = freeResourcesMap.get(id);
-        boolean removed = freeResourcesSet.remove(new Pair(resourceProvided, id));
-        assert(removed == true);
+        if (resourceProvided > 0) {
+            boolean removed = freeResourcesSet.remove(new Pair(resourceProvided, id));
+            if (!removed) {
+                System.out.println(id + "," + resourceProvided);
+                printFreeResourceMap(freeResourcesMap);
+                printFreeResourceSet();
+            }
+            assert(removed == true);
+        }
         freeResourcesMap.remove(id);
         totalFreeResource -= resourceProvided;
         for (Leader potentiaLeader : futureLeaders) {
@@ -196,25 +240,30 @@ public class Cloud {
         }
         
         // Iterate through globalWorkStore and find where this member is currently working
-        Map<Integer, Map<Integer,Integer>> complementWorkStore = new HashMap<Integer, Map<Integer,Integer>>();
         globalWorkStore.forEach((reqId, workAssignment) -> {
-            if (!workAssignment.containsKey(id)) return;
-            int resourcesNeeded = workAssignment.get(id);
-            workAssignment.remove(id);
-            Map<Integer,Integer> complementworkAssignment = allocateResource(resourcesNeeded);
-            // join workAssignment and workAssignment;
-            complementworkAssignment.forEach((workerId, work) -> {
-                if (workAssignment.containsKey(workerId)) {
-                    workAssignment.replace(workerId, workAssignment.get(workerId) + work);
-                } 
-                else {
-                    workAssignment.put(workerId, work);
+            if (workAssignment.containsKey(id)) {
+                int resourcesNeeded = workAssignment.get(id);
+                workAssignment.remove(id);
+                if (resourcesNeeded > totalFreeResource) {
+                    System.out.println("Forfeit work " + resourcesNeeded + " by " + id + ", total resources " + totalFreeResource);
                 }
-            });
-            // Build complement work store
-            complementWorkStore.put(reqId, complementworkAssignment);
+                else {
+                    Map<Integer,Integer> complementworkAssignment = allocateResource(resourcesNeeded);
+                    // join workAssignment and workAssignment;
+                    complementworkAssignment.forEach((workerId, work) -> {
+                        if (workAssignment.containsKey(workerId)) {
+                            workAssignment.replace(workerId, workAssignment.get(workerId) + work);
+                        } 
+                        else {
+                            workAssignment.put(workerId, work);
+                        }
+                    });
+                    // Build complement work store
+                    complementWorkStore.put(reqId, complementworkAssignment);
+                }
+            }
         });
-        
+
         return complementWorkStore;
     }
 
@@ -222,17 +271,20 @@ public class Cloud {
         Map<Integer, Map<Integer,Integer>> complementGlobalWorkStore = new HashMap<Integer, Map<Integer,Integer>>();
         while (!pendingRequests.isEmpty()) {
             Request currentRequest = pendingRequests.peek();
-            if (currentRequest.resourcesNeeded < totalFreeResource) {
+            if (currentRequest.resourcesNeeded > totalFreeResource) {
                 break;
             }
             else {
+                simulatorRef.changeTotalRequestsQueued(false);
                 Map<Integer,Integer> workAssignment = allocateResource(currentRequest.resourcesNeeded);
+                assert(!globalWorkStore.containsKey(currentRequest.id));
                 globalWorkStore.put(currentRequest.id, workAssignment);
                 Map<Integer,Integer> workAssignmentCopy = new HashMap<Integer,Integer>();
                 workAssignment.forEach((workerId, work) -> { 
                     workAssignmentCopy.put(workerId, work);
                 });
                 complementGlobalWorkStore.put(currentRequest.id, workAssignmentCopy);
+                pendingRequests.remove();
             }
         }
         return complementGlobalWorkStore;
@@ -258,7 +310,6 @@ public class Cloud {
     }
 
     public void electLeader() {
-        simulatorRef.incrLeaderAlgoInvokedCount();
         for (Leader potentiaLeader1 : futureLeaders) {
             for (Leader potentialLeader2 : futureLeaders) {
                 potentiaLeader1.LQI += Math.abs(potentiaLeader1.speed - potentialLeader2.speed); 
@@ -277,5 +328,14 @@ public class Cloud {
         this.resourceQuotaMetTime = formedTime;
         this.simulatorRef.recordCloudFormed(formedTime - this.initialRequestTime, formedByRSU);
         return;
+    }
+
+    public void printStats() {
+        String message = "Cloud with leader " + currentLeaderId + ", members ";
+        for (Map.Entry<Integer, Integer> entry : freeResourcesMap.entrySet()) {
+            message += (entry.getKey() + "(" + entry.getValue() + ") "); 
+        }
+        message += "formed.";
+        System.out.println(message);
     }
 }

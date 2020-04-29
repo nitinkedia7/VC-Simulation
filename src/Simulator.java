@@ -49,9 +49,8 @@ public class Simulator implements Runnable {
     int totalCloudsFormedRSU;
     long totalCloudsFormationTimeRSU;
     int totalRequestsServiced;
-    int totalCloudsQueued;
+    int totalRequestsQueued;
 
-    int leaderAlgoInvoked;
     int leaderChangeCount;
     int leaderLeaveCount;
 
@@ -79,11 +78,10 @@ public class Simulator implements Runnable {
         totalCloudsFormedRSU = 0;
         totalCloudsFormationTimeRSU = 0;
         totalRequestsServiced = 0;
-        totalCloudsQueued = 0;
+        totalRequestsQueued = 0;
         
         leaderChangeCount = 0;
         leaderLeaveCount = 0;
-        leaderAlgoInvoked = 0;
         // Spawn vehicles at random positions
         vehicles  = new ArrayList<Vehicle>();
         for (int i = 1; i <= totalVehicleCount; i++) {
@@ -132,12 +130,12 @@ public class Simulator implements Runnable {
         }
     }
 
-    public synchronized void changeRequestQueuedCount(boolean incr) {
+    public synchronized void changeTotalRequestsQueued(boolean incr) {
         if (incr) {
-            totalCloudsQueued++;
+            totalRequestsQueued++;
         }
         else {
-            totalCloudsQueued--;
+            totalRequestsQueued--;
         }
     }
 
@@ -151,10 +149,6 @@ public class Simulator implements Runnable {
 
     public synchronized void incrLeaderLeaveCount() {
         leaderLeaveCount++;
-    }
-
-    public synchronized void incrLeaderAlgoInvokedCount() {
-        leaderAlgoInvoked++;
     }
 
     public void printStatistics() {
@@ -190,6 +184,7 @@ public class Simulator implements Runnable {
         System.out.println("Total clouds formed distributedly = " + totalCloudsFormedSelf);
         System.out.println("Average cloud formation time (ms) distributedly = " + decimalFormat.format(averageCloudFormationTimeSelf));
         System.out.println("Total requests serviced = " + totalRequestsServiced);
+        System.out.println("Total requests still queued = " + totalRequestsQueued);
         System.out.println("Leader change count = " + leaderChangeCount);
         System.out.println("Leader leave count = " + leaderLeaveCount);
 
@@ -199,7 +194,7 @@ public class Simulator implements Runnable {
             averageVehicleSpeed,
             packetStats.get(Config.PACKET_TYPE.RREQ).generatedCount + packetStats.get(Config.PACKET_TYPE.RJOIN).generatedCount,
             totalRequestsServiced,
-            totalCloudsQueued,
+            totalRequestsQueued,
             decimalFormat.format(averageClusterOverhead),
             totalCloudsFormedRSU,
             decimalFormat.format(averageCloudFormationTimeRSU),
@@ -254,7 +249,7 @@ public class Simulator implements Runnable {
             fw.flush();
 
             int avgVehicleSpeedKMPH = 60;
-            for (int vehiclesPerSegment = 8; vehiclesPerSegment <= 32; vehiclesPerSegment += 8) {
+            for (int vehiclesPerSegment = 24; vehiclesPerSegment <= 24; vehiclesPerSegment += 8) {
                 try {
                     String logFilePath = String.format("%s/%d_%d.log", logDirectoryPath, vehiclesPerSegment, avgVehicleSpeedKMPH);
                     PrintStream logFile = new PrintStream(new File(logFilePath));
