@@ -40,8 +40,8 @@ public class Simulator implements Runnable {
             System.out.println("Total packets generated = " + generatedCount);
             System.out.println("Total packets transmitted = " + transmittedCount);
             System.out.println("Total packets received = " + receivedCount);
-            System.out.println("Average transmit time in ms = " + decimalFormat.format(totalTransmitTime.doubleValue() / transmittedCount.intValue()));
-            System.out.println("Average receive time in ms = " + decimalFormat.format(totalReceiveTime.doubleValue() / receivedCount.intValue()));
+            System.out.println("Average transmit time in ms = " + decimalFormat.format(totalTransmitTime.floatValue() / transmittedCount.intValue()));
+            System.out.println("Average receive time in ms = " + decimalFormat.format(totalReceiveTime.floatValue() / receivedCount.intValue()));
         }
     }
     Map<Config.PACKET_TYPE, PacketStat> packetStats;
@@ -90,12 +90,12 @@ public class Simulator implements Runnable {
         vehicles  = new ArrayList<Vehicle>();
         for (int i = 1; i <= totalVehicleCount; i++) {
             // givenAverageVehicleSpeed * 0.277 is to convert km/h to m/s
-            vehicles.add(new Vehicle(i, timeSync, this, medium, stopTime, givenAverageVehicleSpeed * 0.277));
+            vehicles.add(new Vehicle(i, timeSync, this, medium, stopTime, givenAverageVehicleSpeed * 0.277f));
         }
 
         // Spawn RSU's in the mid of each (implicit) segment
         roadSideUnits = new ArrayList<RoadSideUnit>();
-        double rsuPosition = Config.SEGMENT_LENGTH * 0.5;
+        float rsuPosition = Config.SEGMENT_LENGTH * 0.5f;
         int rsuId = 1;
         while (rsuPosition < Config.ROAD_END) {
             if (rsuId % 2 == 1) { // Position RSU's at alternate segments
@@ -179,16 +179,16 @@ public class Simulator implements Runnable {
         System.out.println("Total packets generated = " + totalGeneratedCount);
         System.out.println("Total packets transmitted = " + totalTransmittedCount);
         System.out.println("Total packets received = " + totalReceivedCount);
-        System.out.println("Average transmit time in ms = " + decimalFormat.format(((double) totalTransmitTime) / totalTransmittedCount));
-        System.out.println("Average receive time in ms = " + decimalFormat.format(((double) totalReceiveTime) / totalReceivedCount));
+        System.out.println("Average transmit time in ms = " + decimalFormat.format(((float) totalTransmitTime) / totalTransmittedCount));
+        System.out.println("Average receive time in ms = " + decimalFormat.format(((float) totalReceiveTime) / totalReceivedCount));
     
-        double averageClusterOverhead = 
+        float averageClusterOverhead = 
             totalTransmittedCount
             - packetStats.get(Config.PACKET_TYPE.PSTART).transmittedCount.intValue()
             - packetStats.get(Config.PACKET_TYPE.PDONE).transmittedCount.intValue();
         averageClusterOverhead /= totalTransmittedCount;
-        double averageCloudFormationTimeSelf = totalCloudsFormationTimeSelf.doubleValue() / totalCloudsFormedSelf.intValue();
-        double averageCloudFormationTimeRSU = totalCloudsFormationTimeRSU.doubleValue() / totalCloudsFormedRSU.intValue();
+        float averageCloudFormationTimeSelf = totalCloudsFormationTimeSelf.floatValue() / totalCloudsFormedSelf.intValue();
+        float averageCloudFormationTimeRSU = totalCloudsFormationTimeRSU.floatValue() / totalCloudsFormedRSU.intValue();
         System.out.println("-----------------------------------------");
         System.out.println("Average cluster overhead = " + decimalFormat.format(averageClusterOverhead));
         System.out.println("Total clouds formed by RSU = " + totalCloudsFormedRSU);

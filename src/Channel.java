@@ -12,9 +12,9 @@ public class Channel implements Runnable {
 
     public class Transmitter {
         int id;
-        double position;
+        float position;
 
-        public Transmitter(int id, double position) {
+        public Transmitter(int id, float position) {
             this.id = id;
             this.position = position;
         }
@@ -35,7 +35,7 @@ public class Channel implements Runnable {
         transmitterPositionsLock = new ReentrantLock(Config.useFair);
     }
 
-    public boolean isFree(int id, double position) {
+    public boolean isFree(int id, float position) {
         transmitterPositionsLock.lock();
         for (Transmitter t : transmitterPositions) {
             int segment1 = (int) (position / Config.SEGMENT_LENGTH);
@@ -62,14 +62,14 @@ public class Channel implements Runnable {
     //     transmitterPositionsLock.unlock();
     // }
 
-    public void transmitPacket(Packet packet, int currentTime, double currentPosition) {
+    public void transmitPacket(Packet packet, int currentTime, float currentPosition) {
         packetQueueLock.writeLock().lock();
         packetQueue.add(packet);
         packet.recordTransmission(currentTime, currentPosition);
         packetQueueLock.writeLock().unlock();
     }
 
-    public int receivePackets(int receiverId, int readTillIndex, int currentTime, double position, Queue<Packet> receiveQueue) {
+    public int receivePackets(int receiverId, int readTillIndex, int currentTime, float position, Queue<Packet> receiveQueue) {
         packetQueueLock.readLock().lock();
         int newPacketCount = packetQueue.size() - readTillIndex;
         while (readTillIndex < packetQueue.size()) {

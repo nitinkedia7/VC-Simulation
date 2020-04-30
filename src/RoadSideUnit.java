@@ -3,7 +3,7 @@ import java.util.concurrent.Phaser;
 
 public class RoadSideUnit implements Runnable {
     int id;
-    double position;
+    float position;
     Phaser timeSync;
     int currentTime;
     int stopTime;
@@ -17,7 +17,7 @@ public class RoadSideUnit implements Runnable {
     int backoffTime;
     int contentionWindowSize;
 
-    public RoadSideUnit(int id, double position, Phaser timeSync, Simulator simulatorRef, Medium mediumRef, int stopTime) {
+    public RoadSideUnit(int id, float position, Phaser timeSync, Simulator simulatorRef, Medium mediumRef, int stopTime) {
         this.id = id;
         this.position = position;
         this.currentTime = 0;

@@ -4,9 +4,9 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public class Vehicle implements Runnable {
     int id;
-    double position;
-    double speed;
-    double averageSpeed;
+    float position;
+    float speed;
+    float averageSpeed;
     int direction;
     int lastUpdated;
     int currentTime;
@@ -47,9 +47,9 @@ public class Vehicle implements Runnable {
     int pendingRequestGenTime;
     boolean hasPendingRequest;
 
-    public Vehicle(int id, Phaser timeSync, Simulator simulatorRef, Medium mediumRef, int stopTime, double averageSpeed) {
+    public Vehicle(int id, Phaser timeSync, Simulator simulatorRef, Medium mediumRef, int stopTime, float averageSpeed) {
         this.id = id;        
-        this.position = ThreadLocalRandom.current().nextDouble() * Config.ROAD_END;
+        this.position = ThreadLocalRandom.current().nextFloat() * Config.ROAD_END;
         this.averageSpeed = averageSpeed;
         this.speed = averageSpeed;
         this.direction = ThreadLocalRandom.current().nextInt(2);
@@ -75,14 +75,14 @@ public class Vehicle implements Runnable {
         // System.out.println("Vehicle " + id + " initialised at position " + this.position);
     } 
 
-    public boolean hasSegmentChanged(double oldPosition, double newPosition) {
+    public boolean hasSegmentChanged(float oldPosition, float newPosition) {
         int oldSegmentId = (int) (oldPosition / Config.SEGMENT_LENGTH);
         int newSegmentId = (int) (newPosition / Config.SEGMENT_LENGTH);
         return oldSegmentId != newSegmentId;
     }
 
     public void updatePosition() {
-        double newPosition = position + (direction * speed * (currentTime - lastUpdated)) / 1000;
+        float newPosition = position + (direction * speed * (currentTime - lastUpdated)) / 1000;
         if (newPosition > Config.ROAD_END) {
             newPosition = Config.ROAD_END;
             direction = -1;
@@ -110,9 +110,9 @@ public class Vehicle implements Runnable {
         }
         position = newPosition;
 
-        double newSpeed;
+        float newSpeed;
         do {
-            newSpeed = ThreadLocalRandom.current().nextGaussian();
+            newSpeed = (float) ThreadLocalRandom.current().nextGaussian();
             newSpeed = newSpeed * Config.VEHICLE_SPEED_STD_DEV + averageSpeed;
         } while (newSpeed < Config.VEHICLE_SPEED_MIN || newSpeed > Config.VEHICLE_SPEED_MAX);
         speed = newSpeed;

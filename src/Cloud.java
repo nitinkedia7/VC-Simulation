@@ -50,10 +50,10 @@ public class Cloud {
 
     class Leader {
         int id;
-        double speed;
-        double LQI;
+        float speed;
+        float LQI;
 
-        public Leader(int id, double speed) {
+        public Leader(int id, float speed) {
             this.id = id;
             this.speed = speed;
             this.LQI = 0;
@@ -110,7 +110,7 @@ public class Cloud {
         return freeResourcesMap.containsKey(id);
     }
 
-    public void addMember(int id, int resourceLimit, double velocity) {
+    public void addMember(int id, int resourceLimit, float velocity) {
         assert(resourceLimit > 0);
         if (freeResourcesMap.containsKey(id)) {
             // already present
