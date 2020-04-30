@@ -1,6 +1,5 @@
 import java.util.*;
 import java.util.concurrent.Phaser;
-import java.util.concurrent.ThreadLocalRandom;
 
 public class RoadSideUnit implements Runnable {
     int id;
@@ -86,6 +85,16 @@ public class RoadSideUnit implements Runnable {
         }
     }
 
+    public void handleRTEAR(Packet tearPacket) {
+        Cloud cloud = clouds.get(tearPacket.appId);
+        if (cloud == null || !cloud.isCloudLeader(tearPacket.senderId)) {
+            return;
+        }
+        else {
+            clouds.remove(tearPacket.appId);
+        }
+    }
+
     public void run() {
         while (currentTime <= stopTime) {
             // System.out.println("RSU     " + id + " starting interval " + currentTime);
@@ -132,9 +141,7 @@ public class RoadSideUnit implements Runnable {
             readTillIndex += newPacketCount;
             while (!receiveQueue.isEmpty()) {
                 Packet p = receiveQueue.poll();
-                assert p != null : "Read packet is NULL";      
-                p.printRead(id);              
-                
+                assert p != null : "Read packet is NULL";                      
                 switch (p.type) {
                     case RREQ:
                         handleRREQ(p);
@@ -149,7 +156,7 @@ public class RoadSideUnit implements Runnable {
                         // RSU sends RACK, not process it
                         break;
                     case RTEAR:
-                        clouds.remove(p.appId);
+                        handleRTEAR(p);
                         break;
                     case RPROBE:
                         handleRPROBE(p);
@@ -163,6 +170,6 @@ public class RoadSideUnit implements Runnable {
             timeSync.arriveAndAwaitAdvance();
             currentTime++;
         }
-        System.out.println("RSU     " + id + " stopped after " + stopTime + " ms.");   
+        // System.out.println("RSU     " + id + " stopped after " + stopTime + " ms.");   
     }
 }

@@ -181,10 +181,11 @@ public class Simulator implements Runnable {
         System.out.println("Average transmit time in ms = " + decimalFormat.format(((double) totalTransmitTime) / totalTransmittedCount));
         System.out.println("Average receive time in ms = " + decimalFormat.format(((double) totalReceiveTime) / totalReceivedCount));
     
-        double averageClusterOverhead = ((double) totalTransmittedCount) / totalRequestsServiced;
+        double averageClusterOverhead = totalTransmittedCount - packetStats.get(Config.PACKET_TYPE.PSTART).transmittedCount -  packetStats.get(Config.PACKET_TYPE.PDONE).transmittedCount;
+        averageClusterOverhead /= totalTransmittedCount;
         double averageCloudFormationTimeSelf = ((double) totalCloudsFormationTimeSelf) / totalCloudsFormedSelf;
         double averageCloudFormationTimeRSU = ((double) totalCloudsFormationTimeRSU) / totalCloudsFormedRSU;
-        System.out.println();
+        System.out.println("-----------------------------------------");
         System.out.println("Average cluster overhead = " + decimalFormat.format(averageClusterOverhead));
         System.out.println("Total clouds formed by RSU = " + totalCloudsFormedRSU);
         System.out.println("Average cloud formation time (ms) by RSU = " + decimalFormat.format(averageCloudFormationTimeRSU));
@@ -234,8 +235,11 @@ public class Simulator implements Runnable {
         for (Vehicle v : vehicles) {
             new Thread(v).start();
         }
+        System.out.println("Simulation Started");    
         while (currentTime <= stopTime) {
-            System.out.println("Interval " + currentTime);
+            if (currentTime % 1000 == 0) {
+                System.out.println("Interval " + currentTime);
+            }
             timeSync.arriveAndAwaitAdvance();
             timeSync.arriveAndAwaitAdvance();
             currentTime++;
@@ -245,7 +249,7 @@ public class Simulator implements Runnable {
         } catch (Exception e) {
             System.out.println(e);
         }
-        System.out.println("Simulation stopped after " + stopTime + " ms");
+        System.out.println("Simulation Finished after " + stopTime + " ms");
     }
 
     public static void main(String[] args) {

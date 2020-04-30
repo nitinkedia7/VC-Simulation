@@ -120,6 +120,11 @@ public class Vehicle implements Runnable {
         return;
     }
 
+    private int getRandomChunkSize() {
+        int multiplier = ThreadLocalRandom.current().nextInt(Config.APPLICATION_TYPE_COUNT) + 1;
+        return Config.WORK_CHUNK_SIZE * multiplier;
+    }
+
     public void handleRREQ(Packet p) {
         // If this vehicle is the leader then it enqueues it
         Cloud cloud = clouds.get(p.appId);
@@ -129,7 +134,7 @@ public class Vehicle implements Runnable {
 
         // Also send a RREP, if someone else's request
         if (p.senderId != id) {
-            Packet rrepPacket = new Packet(simulatorRef, Config.PACKET_TYPE.RREP, id, currentTime, direction * speed, p.appId, Config.WORK_CHUNK_SIZE);
+            Packet rrepPacket = new Packet(simulatorRef, Config.PACKET_TYPE.RREP, id, currentTime, direction * speed, p.appId, getRandomChunkSize());
             transmitQueue.add(rrepPacket);
             handleRREP(rrepPacket);
         }
@@ -199,6 +204,11 @@ public class Vehicle implements Runnable {
             transmitQueue.add(pstartPacket);
             handlePSTART(pstartPacket);
         }
+        else if (cloud.globalWorkStore.isEmpty()) {
+            Packet tearPacket = new Packet(simulatorRef, Config.PACKET_TYPE.RTEAR, id, currentTime, donePacket.appId);
+            transmitQueue.add(tearPacket);
+            clouds.remove(donePacket.appId);
+        }
     }
 
     public void handleRLEAVE(Packet packet) {
@@ -224,16 +234,34 @@ public class Vehicle implements Runnable {
         // Ensure that no cloud this appId exists till now
         Cloud cloud = clouds.get(pendingAppId);
         if (cloud != null) {
-            Packet rjoinPacket = new Packet(simulatorRef, Config.PACKET_TYPE.RJOIN, id, currentTime, speed * direction, pendingAppId, Config.MAX_RESOURCE_QUOTA, Config.WORK_CHUNK_SIZE);
-            // System.out.println("Self initiating cloud formation when one is already present.");
+            Packet rjoinPacket = new Packet(
+                simulatorRef,
+                Config.PACKET_TYPE.RJOIN,
+                id,
+                currentTime,
+                speed * direction,
+                pendingAppId,
+                Config.APPLICATION_REQUIREMENT[pendingAppId],
+                getRandomChunkSize()
+            );
             transmitQueue.add(rjoinPacket);
             handleRJOIN(rjoinPacket);
-            return;
         }
-        Packet reqPacket = new Packet(simulatorRef, Config.PACKET_TYPE.RREQ, id, currentTime, speed * direction, pendingAppId, Config.MAX_RESOURCE_QUOTA, Config.WORK_CHUNK_SIZE);
-        clouds.put(reqPacket.appId, new Cloud(simulatorRef, reqPacket.appId, id, false, pendingRequestGenTime));
-        clouds.get(reqPacket.appId).addNewRequest(reqPacket);
-        transmitQueue.add(reqPacket);
+        else {
+            Packet reqPacket = new Packet(
+                simulatorRef,
+                Config.PACKET_TYPE.RREQ,
+                id,
+                currentTime,
+                speed * direction,
+                pendingAppId,
+                Config.APPLICATION_REQUIREMENT[pendingAppId],
+                getRandomChunkSize()
+            );
+            clouds.put(reqPacket.appId, new Cloud(simulatorRef, reqPacket.appId, id, false, pendingRequestGenTime));
+            clouds.get(reqPacket.appId).addNewRequest(reqPacket);
+            transmitQueue.add(reqPacket);
+        }
     }
 
     public void handleRPROBE(Packet probe) {
@@ -252,21 +280,47 @@ public class Vehicle implements Runnable {
 
         hasPendingRequest = false;
         if (packet.rsuReplied) {
-            Packet rreqPacket = new Packet(simulatorRef, Config.PACKET_TYPE.RREQ, id, currentTime, speed * direction, pendingAppId, Config.MAX_RESOURCE_QUOTA, Config.WORK_CHUNK_SIZE);
+            Packet rreqPacket = new Packet(
+                simulatorRef,
+                Config.PACKET_TYPE.RREQ,
+                id,
+                currentTime,
+                speed * direction,
+                pendingAppId,
+                Config.APPLICATION_REQUIREMENT[pendingAppId],
+                getRandomChunkSize()
+            );
             transmitQueue.add(rreqPacket);
             handleRREQ(rreqPacket);
         }
         else {
-            Packet rjoinPacket = new Packet(simulatorRef, Config.PACKET_TYPE.RJOIN, id, currentTime, speed * direction, pendingAppId, Config.MAX_RESOURCE_QUOTA, Config.WORK_CHUNK_SIZE);
+            Packet rjoinPacket = new Packet(
+                simulatorRef,
+                Config.PACKET_TYPE.RJOIN,
+                id, currentTime,
+                speed * direction,
+                pendingAppId,
+                Config.APPLICATION_REQUIREMENT[pendingAppId],
+                getRandomChunkSize()
+            );
             transmitQueue.add(rjoinPacket);
             handleRJOIN(rjoinPacket);
+        }
+    }
+
+    public void handleRTEAR(Packet tearPacket) {
+        Cloud cloud = clouds.get(tearPacket.appId);
+        if (cloud == null || !cloud.isCloudLeader(tearPacket.senderId)) {
+            return;
+        }
+        else {
+            clouds.remove(tearPacket.appId);
         }
     }
 
     public void run() {
         while (currentTime <= stopTime) {
             // System.out.println("Vehicle " + id + " starting interval " + currentTime);
-            if (currentTime % 50 == 0) updatePosition();
             Channel targetChannel = mediumRef.channels[channelId];
 
             if (!transmitQueue.isEmpty()) {
@@ -321,7 +375,7 @@ public class Vehicle implements Runnable {
 
             if (hasPendingRequest) {
                 // Wait Config.MAX_WAIT_TIME for a RQUEUE message, if received OK, else self-initiate
-                if (currentTime >= pendingRequestGenTime + Config.MAX_RQUEUE_WAIT_TIME) {
+                if (currentTime >= pendingRequestGenTime + Config.MAX_RPRESENT_WAIT_TIME) {
                     selfInitiateCloudFormation();
                     hasPendingRequest = false;
                 }
@@ -332,7 +386,16 @@ public class Vehicle implements Runnable {
                 int appId = ThreadLocalRandom.current().nextInt(Config.APPLICATION_TYPE_COUNT);
                 if (hasRequest == 1) {
                     if (clouds.get(appId) != null) {
-                        Packet rjoinPacket = new Packet(simulatorRef, Config.PACKET_TYPE.RJOIN, id, currentTime, speed * direction, appId, Config.MAX_RESOURCE_QUOTA, Config.WORK_CHUNK_SIZE);
+                        Packet rjoinPacket = new Packet(
+                            simulatorRef,
+                            Config.PACKET_TYPE.RJOIN,
+                            id,
+                            currentTime,
+                            speed * direction,
+                            appId,
+                            Config.APPLICATION_REQUIREMENT[pendingAppId],
+                            getRandomChunkSize()
+                        );
                         transmitQueue.add(rjoinPacket);
                         handleRJOIN(rjoinPacket);
                     }
@@ -355,7 +418,6 @@ public class Vehicle implements Runnable {
             while (!receiveQueue.isEmpty()) {
                 Packet p = receiveQueue.poll();
                 assert p != null : "Read packet is NULL";      
-                p.printRead(id);              
                 
                 switch (p.type) {
                     case RREQ:
@@ -371,7 +433,7 @@ public class Vehicle implements Runnable {
                         handleRACK(p);
                         break;
                     case RTEAR:
-                        clouds.remove(p.appId);
+                        handleRTEAR(p);
                         break;
                     case PSTART:
                         handlePSTART(p);
@@ -394,9 +456,11 @@ public class Vehicle implements Runnable {
                 }
             }
             timeSync.arriveAndAwaitAdvance();
+            // Do offline work in this interval
+            if (currentTime % 50 == 0) updatePosition();
             timeSync.arriveAndAwaitAdvance();
             currentTime++;
         }
-        System.out.println("Vehicle " + id + " stopped after " + stopTime + " ms.");   
+        // System.out.println("Vehicle " + id + " stopped after " + stopTime + " ms.");   
     }
 }

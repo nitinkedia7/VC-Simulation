@@ -83,9 +83,4 @@ public class Packet {
     public void recordReception(int currentTime) {
         simulatorRef.recordReception(type, currentTime - genTime);
     }
-
-    public void printRead(int readerId) {
-        // System.out.println("Packet : " + readerId + " read " + type + " from " + senderId + " at " + genTime);
-        return;
-    }
 }

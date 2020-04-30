@@ -1,4 +1,5 @@
 public class Config {
+    static int STOP_TIME = 30000;
     static double ROAD_END = 15000.0; // m
     static double ROAD_START = 0.0;
 
@@ -12,13 +13,12 @@ public class Config {
         RREQ, RJOIN, RREP, RACK, RTEAR, PSTART, PDONE, RLEAVE, RPROBE, RPRESENT;
     }
     static boolean useFair = true;
-    static int APPLICATION_TYPE_COUNT = 1;
-    static int TRY_LOCK_WAIT_TIME = 100;
-    static int STOP_TIME = 30000;
+    static int APPLICATION_TYPE_COUNT = 5;
     // A vehicle stays in a segment for a minimum of 24 s,
     // as given by segment length (600 m) / max speed (25 m/s).
-    static int MAX_RESOURCE_QUOTA = 2000; // should in order of seconds
-    static int WORK_CHUNK_SIZE = 250;
+    // Thus requirement should be in seconds.
+    static int[] APPLICATION_REQUIREMENT = {500, 1000, 1500, 2000, 2500}; 
+    static int WORK_CHUNK_SIZE = 100;
     static int PROCESSING_SPEED = 1;
     
     static int INV_RREQ_PROB = 2000;
@@ -26,6 +26,6 @@ public class Config {
     static int CONTENTION_WINDOW_BASE = 1;
     static int CONTENTION_WINDOW_MAX = 1024;
     
-    static int MAX_RQUEUE_WAIT_TIME = 50;
+    static int MAX_RPRESENT_WAIT_TIME = 10;
     static String LOG_PATH = "../logs/";
 }

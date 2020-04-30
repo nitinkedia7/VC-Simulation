@@ -102,6 +102,7 @@ public class Cloud {
 
     private void subtract(int resourceAmount) {
         totalFreeResource -= resourceAmount;
+        assert(totalFreeResource >= 0);
         // System.err.println(totalFreeResource);
     }
 
@@ -138,7 +139,7 @@ public class Cloud {
                 workAssignment.put(p.second, acceptedResources);
                 allocatedResources += acceptedResources;
                 // totalFreeResource -= acceptedResources;
-                subtract(allocatedResources);
+                subtract(acceptedResources);
             }
             else {
                 freeResourcesMap.replace(p.second, 0);
@@ -193,7 +194,12 @@ public class Cloud {
             return;
         }
         int workAllocated = workAssignment.get(workerId);
-        assert(workAllocated >= workDoneAmount);
+        if (workAllocated < workDoneAmount) {
+            System.out.printf("App id %d, request id %d, worker id %d:\n", appId, reqId, workerId);
+            printFreeResourceMap(globalWorkStore.get(reqId));
+            System.out.println("Work allocated " + workAllocated + " but work done " + workDoneAmount);
+        }
+        // assert workAllocated >= workDoneAmount : "Work allocated " + workAllocated + " but work done " + workDoneAmount;  
         workDoneAmount = Math.min(workDoneAmount, workAllocated);
         if (workAllocated - workDoneAmount == 0) {
             workAssignment.remove(workerId);
@@ -205,6 +211,8 @@ public class Cloud {
         }
         replenishResource(workerId, workDoneAmount);
         if (globalWorkStore.get(reqId).isEmpty()) {
+            globalWorkStore.remove(reqId);
+            System.out.printf("Request %d serviced\n", reqId);
             this.simulatorRef.incrTotalRequestsServiced();
         }
         return;
@@ -335,7 +343,8 @@ public class Cloud {
     }
 
     public boolean justMetResourceQuota() {
-        return resourceQuotaMetTime == Integer.MAX_VALUE && totalFreeResource >= Config.MAX_RESOURCE_QUOTA;
+        return (resourceQuotaMetTime == Integer.MAX_VALUE &&
+            totalFreeResource >= Config.APPLICATION_REQUIREMENT[appId]);
     }
 
     public void recordCloudFormed(int formedTime) {
