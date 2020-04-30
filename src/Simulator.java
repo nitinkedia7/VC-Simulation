@@ -1,7 +1,8 @@
+import java.io.*;
 import java.util.*;
 import java.util.concurrent.Phaser;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.text.DecimalFormat;
-import java.io.*;
 
 public class Simulator implements Runnable {
     int currentTime;
@@ -18,19 +19,19 @@ public class Simulator implements Runnable {
 
     public class PacketStat {
         Config.PACKET_TYPE type;
-        int generatedCount;
-        int transmittedCount;
-        int receivedCount;
-        int totalTransmitTime;
-        int totalReceiveTime;
+        AtomicInteger generatedCount;
+        AtomicInteger transmittedCount;
+        AtomicInteger receivedCount;
+        AtomicInteger totalTransmitTime;
+        AtomicInteger totalReceiveTime;
 
         public PacketStat(Config.PACKET_TYPE type) {
             this.type = type;
-            this.generatedCount = 0;
-            this.transmittedCount = 0;
-            this.receivedCount = 0;
-            this.totalTransmitTime = 0;
-            this.totalReceiveTime = 0;
+            this.generatedCount = new AtomicInteger();
+            this.transmittedCount = new AtomicInteger();
+            this.receivedCount = new AtomicInteger();
+            this.totalTransmitTime = new AtomicInteger();
+            this.totalReceiveTime = new AtomicInteger();
         }
 
         public void printStatistics() {
@@ -39,21 +40,21 @@ public class Simulator implements Runnable {
             System.out.println("Total packets generated = " + generatedCount);
             System.out.println("Total packets transmitted = " + transmittedCount);
             System.out.println("Total packets received = " + receivedCount);
-            System.out.println("Average transmit time in ms = " + decimalFormat.format(((double) totalTransmitTime)/transmittedCount));
-            System.out.println("Average receive time in ms = " + decimalFormat.format(((double) totalReceiveTime)/receivedCount));
+            System.out.println("Average transmit time in ms = " + decimalFormat.format(totalTransmitTime.doubleValue() / transmittedCount.intValue()));
+            System.out.println("Average receive time in ms = " + decimalFormat.format(totalReceiveTime.doubleValue() / receivedCount.intValue()));
         }
     }
     Map<Config.PACKET_TYPE, PacketStat> packetStats;
-    int totalCloudsFormedSelf;
-    long totalCloudsFormationTimeSelf;
-    int totalCloudsFormedRSU;
-    long totalCloudsFormationTimeRSU;
-    int totalRequestsServiced;
-    int totalRequestsQueued;
+    AtomicInteger totalCloudsFormedSelf;
+    AtomicInteger totalCloudsFormationTimeSelf;
+    AtomicInteger totalCloudsFormedRSU;
+    AtomicInteger totalCloudsFormationTimeRSU;
+    AtomicInteger totalRequestsServiced;
+    AtomicInteger totalRequestsQueued;
 
-    int leaderChangeCount;
-    int leaderLeaveCount;
-    int rrepReceivecCount;
+    AtomicInteger leaderChangeCount;
+    AtomicInteger leaderLeaveCount;
+    AtomicInteger rrepReceivecCount;
 
     public Simulator(int givenVehiclePerSegment, int givenAverageVehicleSpeed, FileWriter fw) {
         currentTime = 0;
@@ -66,7 +67,7 @@ public class Simulator implements Runnable {
         timeSync.register();
         medium = new Medium(stopTime, timeSync);
         decimalFormat = new DecimalFormat();
-        decimalFormat.setMaximumFractionDigits(3);
+        decimalFormat.setMaximumFractionDigits(4);
         csvFileWriter = fw;
 
         packetStats = new HashMap<Config.PACKET_TYPE, PacketStat>();
@@ -74,16 +75,16 @@ public class Simulator implements Runnable {
             packetStats.put(type, new PacketStat(type));
 
         }
-        totalCloudsFormedSelf = 0;
-        totalCloudsFormationTimeSelf = 0;
-        totalCloudsFormedRSU = 0;
-        totalCloudsFormationTimeRSU = 0;
-        totalRequestsServiced = 0;
-        totalRequestsQueued = 0;
+        totalCloudsFormedSelf = new AtomicInteger();
+        totalCloudsFormationTimeSelf = new AtomicInteger();
+        totalCloudsFormedRSU = new AtomicInteger();
+        totalCloudsFormationTimeRSU = new AtomicInteger();
+        totalRequestsServiced = new AtomicInteger();
+        totalRequestsQueued = new AtomicInteger();
         
-        leaderChangeCount = 0;
-        leaderLeaveCount = 0;
-        rrepReceivecCount = 0;
+        leaderChangeCount = new AtomicInteger();
+        leaderLeaveCount = new AtomicInteger();
+        rrepReceivecCount = new AtomicInteger();
 
         // Spawn vehicles at random positions
         vehicles  = new ArrayList<Vehicle>();
@@ -106,56 +107,56 @@ public class Simulator implements Runnable {
         System.out.println("Simulation Initialised");    
     }
 
-    public synchronized void incrGenCount(Config.PACKET_TYPE type) {
-        packetStats.get(type).generatedCount++;
+    public void incrGenCount(Config.PACKET_TYPE type) {
+        packetStats.get(type).generatedCount.incrementAndGet();
     }
 
-    public synchronized void recordTransmission(Config.PACKET_TYPE type, int transmitTime) {
+    public void recordTransmission(Config.PACKET_TYPE type, int transmitTime) {
         assert (transmitTime >= 0) : "Negative transmission time encountered for a packet.";
-        packetStats.get(type).transmittedCount++;
-        packetStats.get(type).totalTransmitTime += transmitTime;
+        packetStats.get(type).transmittedCount.incrementAndGet();
+        packetStats.get(type).totalTransmitTime.addAndGet(transmitTime);
     }
 
-    public synchronized void recordReception(Config.PACKET_TYPE type, int receiveTime) {
+    public void recordReception(Config.PACKET_TYPE type, int receiveTime) {
         assert (receiveTime >= 0) : "Negative receive time encountered for a packet.";
-        packetStats.get(type).receivedCount++;
-        packetStats.get(type).totalReceiveTime += receiveTime;
+        packetStats.get(type).receivedCount.incrementAndGet();
+        packetStats.get(type).totalReceiveTime.addAndGet(receiveTime);
     }
 
-    public synchronized void recordCloudFormed(int formationTime, boolean formedByRSU) {
+    public void recordCloudFormed(int formationTime, boolean formedByRSU) {
         if (formedByRSU) {
-            totalCloudsFormedRSU++;
-            totalCloudsFormationTimeRSU += formationTime;
+            totalCloudsFormedRSU.incrementAndGet();
+            totalCloudsFormationTimeRSU.addAndGet(formationTime);
         }
         else {
-            totalCloudsFormedSelf++;
-            totalCloudsFormationTimeSelf += formationTime;
+            totalCloudsFormedSelf.incrementAndGet();
+            totalCloudsFormationTimeSelf.addAndGet(formationTime);
         }
     }
 
-    public synchronized void changeTotalRequestsQueued(boolean incr) {
+    public void changeTotalRequestsQueued(boolean incr) {
         if (incr) {
-            totalRequestsQueued++;
+            totalRequestsQueued.incrementAndGet();
         }
         else {
-            totalRequestsQueued--;
+            totalRequestsQueued.decrementAndGet();
         }
     }
 
-    public synchronized void incrTotalRequestsServiced() {
-        totalRequestsServiced++;
+    public void incrTotalRequestsServiced() {
+        totalRequestsServiced.incrementAndGet();
     }
 
-    public synchronized void incrLeaderChangeCount() {
-        leaderChangeCount++;
+    public void incrLeaderChangeCount() {
+        leaderChangeCount.incrementAndGet();
     }
 
-    public synchronized void incrLeaderLeaveCount() {
-        leaderLeaveCount++;
+    public void incrLeaderLeaveCount() {
+        leaderLeaveCount.incrementAndGet();
     }
 
-    public synchronized void incrRrepReceiveCount() {
-        rrepReceivecCount++;
+    public void incrRrepReceiveCount() {
+        rrepReceivecCount.incrementAndGet();
     }
 
     public void printStatistics() {
@@ -167,11 +168,11 @@ public class Simulator implements Runnable {
 
         for (Config.PACKET_TYPE type : Config.PACKET_TYPE.values()) {
             packetStats.get(type).printStatistics();
-            totalGeneratedCount += packetStats.get(type).generatedCount;
-            totalTransmittedCount += packetStats.get(type).transmittedCount;
-            totalReceivedCount += packetStats.get(type).receivedCount;
-            totalTransmitTime += packetStats.get(type).totalTransmitTime;
-            totalReceiveTime += packetStats.get(type).totalReceiveTime;
+            totalGeneratedCount += packetStats.get(type).generatedCount.intValue();
+            totalTransmittedCount += packetStats.get(type).transmittedCount.intValue();
+            totalReceivedCount += packetStats.get(type).receivedCount.intValue();
+            totalTransmitTime += packetStats.get(type).totalTransmitTime.intValue();
+            totalReceiveTime += packetStats.get(type).totalReceiveTime.intValue();
         }
         System.out.println("-----------------------------------------");
         System.out.println("All packet types");
@@ -181,10 +182,13 @@ public class Simulator implements Runnable {
         System.out.println("Average transmit time in ms = " + decimalFormat.format(((double) totalTransmitTime) / totalTransmittedCount));
         System.out.println("Average receive time in ms = " + decimalFormat.format(((double) totalReceiveTime) / totalReceivedCount));
     
-        double averageClusterOverhead = totalTransmittedCount - packetStats.get(Config.PACKET_TYPE.PSTART).transmittedCount -  packetStats.get(Config.PACKET_TYPE.PDONE).transmittedCount;
+        double averageClusterOverhead = 
+            totalTransmittedCount
+            - packetStats.get(Config.PACKET_TYPE.PSTART).transmittedCount.intValue()
+            - packetStats.get(Config.PACKET_TYPE.PDONE).transmittedCount.intValue();
         averageClusterOverhead /= totalTransmittedCount;
-        double averageCloudFormationTimeSelf = ((double) totalCloudsFormationTimeSelf) / totalCloudsFormedSelf;
-        double averageCloudFormationTimeRSU = ((double) totalCloudsFormationTimeRSU) / totalCloudsFormedRSU;
+        double averageCloudFormationTimeSelf = totalCloudsFormationTimeSelf.doubleValue() / totalCloudsFormedSelf.intValue();
+        double averageCloudFormationTimeRSU = totalCloudsFormationTimeRSU.doubleValue() / totalCloudsFormedRSU.intValue();
         System.out.println("-----------------------------------------");
         System.out.println("Average cluster overhead = " + decimalFormat.format(averageClusterOverhead));
         System.out.println("Total clouds formed by RSU = " + totalCloudsFormedRSU);
@@ -201,15 +205,15 @@ public class Simulator implements Runnable {
             "%d,%d,%d,%d,%d,%s,%d,%s,%d,%s,%d\n",
             vehiclesPerSegment,
             averageVehicleSpeed,
-            packetStats.get(Config.PACKET_TYPE.RREQ).generatedCount + packetStats.get(Config.PACKET_TYPE.RJOIN).generatedCount,
-            totalRequestsServiced,
-            totalRequestsQueued,
+            packetStats.get(Config.PACKET_TYPE.RREQ).generatedCount.intValue() + packetStats.get(Config.PACKET_TYPE.RJOIN).generatedCount.intValue(),
+            totalRequestsServiced.intValue(),
+            totalRequestsQueued.intValue(),
             decimalFormat.format(averageClusterOverhead),
-            totalCloudsFormedRSU,
+            totalCloudsFormedRSU.intValue(),
             decimalFormat.format(averageCloudFormationTimeRSU),
-            totalCloudsFormedSelf,
+            totalCloudsFormedSelf.intValue(),
             decimalFormat.format(averageCloudFormationTimeSelf),
-            leaderChangeCount
+            leaderChangeCount.intValue()
         );
         try {
             csvFileWriter.write(csvRow);
@@ -222,8 +226,8 @@ public class Simulator implements Runnable {
             "Simulation with density %d and average speed %d km/h finished. Leader changed %d times out of %d times leader left.\n",
             vehiclesPerSegment,
             averageVehicleSpeed,
-            leaderChangeCount,
-            leaderLeaveCount
+            leaderChangeCount.intValue(),
+            leaderLeaveCount.intValue()
         );
     }
 
@@ -259,44 +263,45 @@ public class Simulator implements Runnable {
 
             PrintStream console = System.out;
             FileWriter fw = new FileWriter(logDirectoryPath + "/plot.csv", true);
-            fw.write("Average Vehicle Density,Average Vehicle Speed (km/h),Total Requests Generated,Total Requests Serviced,Total Requests Queued,Average Cluster Overhead (Ratio),Clouds formed by RSU,Average Cloud Formation Time by RSU (ms),Clouds formed Distributedly,Average Cloud Formation Time Distributedly (ms),Leader Change Count\n");
+            fw.write("Average Vehicle Density,Average Vehicle Speed (km/h),Requests Generated,Requests Serviced,Requests Queued,Average Cluster Overhead (Ratio),Clouds formed by RSU,Average Cloud Formation Time by RSU (ms),Clouds formed Distributedly,Average Cloud Formation Time Distributedly (ms),Leader Change Count\n");
             fw.flush();
 
-            int avgVehicleSpeedKMPH = 60;
-            for (int vehiclesPerSegment = 24; vehiclesPerSegment <= 24; vehiclesPerSegment += 8) {
-                try {
-                    String logFilePath = String.format("%s/%d_%d.log", logDirectoryPath, vehiclesPerSegment, avgVehicleSpeedKMPH);
-                    PrintStream logFile = new PrintStream(new File(logFilePath));
-                    System.setOut(logFile);
-                    
-                    Simulator simulator = new Simulator(vehiclesPerSegment, avgVehicleSpeedKMPH, fw);
-                    simulator.run();
-                    simulator.printStatistics();
-                } catch (Exception e) {
-                    System.err.printf(
-                        "Simulation with density %d and average speed %d failed.\n", vehiclesPerSegment, avgVehicleSpeedKMPH
-                    );
-                    e.printStackTrace(System.err);
-                }
-            }
-
-            // int averageVehiclePerSegment = 24;
-            // for (int vehicleSpeedKMPH = 30; vehicleSpeedKMPH <= 90; vehicleSpeedKMPH += 10) {
+            // int avgVehicleSpeedKMPH = 60;
+            // for (int vehiclesPerSegment = 8; vehiclesPerSegment <= 36; vehiclesPerSegment += 4) {
             //     try {
-            //         String logFilePath = String.format("%s/%d_%d.log", logDirectoryPath, averageVehiclePerSegment, vehicleSpeedKMPH);
+            //         String logFilePath = String.format("%s/%d_%d.log", logDirectoryPath, vehiclesPerSegment, avgVehicleSpeedKMPH);
             //         PrintStream logFile = new PrintStream(new File(logFilePath));
             //         System.setOut(logFile);
                     
-            //         Simulator simulator = new Simulator(averageVehiclePerSegment, vehicleSpeedKMPH, fw);
+            //         Simulator simulator = new Simulator(vehiclesPerSegment, avgVehicleSpeedKMPH, fw);
             //         simulator.run();
             //         simulator.printStatistics();
             //     } catch (Exception e) {
             //         System.err.printf(
-            //             "Simulation with density %d and average speed %d failed.\n", averageVehiclePerSegment, vehicleSpeedKMPH
+            //             "Simulation with density %d and average speed %d failed.\n", vehiclesPerSegment, avgVehicleSpeedKMPH
             //         );
             //         e.printStackTrace(System.err);
-            //     }    
+            //     }
             // }
+
+            int averageVehiclePerSegment = 24;
+            for (int vehicleSpeedKMPH = 30; vehicleSpeedKMPH <= 90; vehicleSpeedKMPH += 10) {
+                if (vehicleSpeedKMPH == 60) continue;
+                try {
+                    String logFilePath = String.format("%s/%d_%d.log", logDirectoryPath, averageVehiclePerSegment, vehicleSpeedKMPH);
+                    PrintStream logFile = new PrintStream(new File(logFilePath));
+                    System.setOut(logFile);
+                    
+                    Simulator simulator = new Simulator(averageVehiclePerSegment, vehicleSpeedKMPH, fw);
+                    simulator.run();
+                    simulator.printStatistics();
+                } catch (Exception e) {
+                    System.err.printf(
+                        "Simulation with density %d and average speed %d failed.\n", averageVehiclePerSegment, vehicleSpeedKMPH
+                    );
+                    e.printStackTrace(System.err);
+                }    
+            }
             fw.close();
         } catch (IOException ioe) {
             System.err.println("IOException: " + ioe.getMessage());
