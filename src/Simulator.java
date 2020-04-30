@@ -1,8 +1,9 @@
 import java.io.*;
 import java.util.*;
-import java.util.concurrent.Phaser;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.text.DecimalFormat;
+import java.util.concurrent.*;
 
 public class Simulator implements Runnable {
     int currentTime;
@@ -233,26 +234,111 @@ public class Simulator implements Runnable {
         );
     }
 
-    public void run() {
-        for (RoadSideUnit rsu : roadSideUnits) {
-            new Thread(rsu).start();
+    // public void runOld() {
+    //     for (RoadSideUnit rsu : roadSideUnits) {
+    //         new Thread(rsu).start();
+    //     }
+    //     for (Vehicle v : vehicles) {
+    //         new Thread(v).start();
+    //     }
+    //     System.out.println("Simulation Started");    
+    //     while (currentTime <= stopTime) {
+    //         if (currentTime % 1000 == 0) {
+    //             System.out.println("Interval " + currentTime);
+    //         }
+    //         timeSync.arriveAndAwaitAdvance();
+    //         currentTime++;
+    //     }
+    //     try {
+    //         Thread.sleep(1000);
+    //     } catch (Exception e) {
+    //         System.out.println(e);
+    //     }
+    //     System.out.println("Simulation Finished after " + stopTime + " ms");
+    // }
+
+    private class Entity {
+        int id;
+        int index;
+        float position;
+
+        public Entity(RoadSideUnit rsu, int index) {
+            this.id = rsu.id;
+            this.index = index;
+            this.position = rsu.position;
         }
-        for (Vehicle v : vehicles) {
-            new Thread(v).start();
+        
+        public Entity(Vehicle vehicle, int index) {
+            this.id = vehicle.id;
+            this.index = index;
+            this.position = vehicle.position;
         }
-        System.out.println("Simulation Started");    
+
+        public int getSegmentId() {
+            return 0;
+            // return (int) (position / 5 * Config.SEGMENT_LENGTH);
+        }
+    }
+
+    public void run() { // Optimised run implementation
+        System.out.println("Simulation Started");
+        Map<Integer, List<Entity>> segmentMap = new HashMap<Integer, List<Entity>>();
+        List<Callable<Integer>> threadList = new ArrayList<Callable<Integer>>();
+        ExecutorService e = Executors.newFixedThreadPool(650);
         while (currentTime <= stopTime) {
             if (currentTime % 1000 == 0) {
                 System.out.println("Interval " + currentTime);
             }
-            timeSync.arriveAndAwaitAdvance();
+            if (currentTime == 0 || currentTime % 50 == 1) {
+                segmentMap.clear();
+                for (int i = 0; i < totalVehicleCount; i++) {
+                    Entity entity = new Entity(vehicles.get(i), i);
+                    int segmentId = entity.getSegmentId();
+                    if (!segmentMap.containsKey(segmentId)) {
+                        segmentMap.put(segmentId, new LinkedList<Entity>());
+                    }
+                    segmentMap.get(segmentId).add(entity);
+                }
+                for (int i = 0; i < roadSideUnits.size(); i++) {
+                    Entity entity = new Entity(roadSideUnits.get(i), i);
+                    int segmentId = entity.getSegmentId();
+                    if (!segmentMap.containsKey(segmentId)) {
+                        segmentMap.put(segmentId, new LinkedList<Entity>());
+                    }
+                    segmentMap.get(segmentId).add(entity);
+                }
+            }
+            
+            for (List<Entity> elist : segmentMap.values()) {
+                threadList.clear();
+                // Collections.shuffle(elist);
+                for (Entity entity : elist) {
+                    if (entity.id > 0) {
+                        threadList.add(vehicles.get(entity.index));
+                    }
+                    else {
+                        threadList.add(roadSideUnits.get(entity.index));
+                    }
+                }
+                try {
+                    e.invokeAll(threadList);
+                    // for (Thread thread : threadList) {
+                    //     thread.start();
+                    // }
+                    // for (Thread thread : threadList) {
+                    //     thread.join();
+                    // }
+                } catch (InterruptedException ex) {
+                    System.err.printf(
+                        "Simulation with density %d and average speed %d failed at time %d ms.\n", vehiclesPerSegment, averageVehicleSpeed, currentTime
+                    );
+                    ex.printStackTrace(System.err);
+                }
+            }
+            medium.getChannel(0).clearTransmitterPositions();
             currentTime++;
         }
-        try {
-            Thread.sleep(1000);
-        } catch (Exception e) {
-            System.out.println(e);
-        }
+        e.shutdown();
         System.out.println("Simulation Finished after " + stopTime + " ms");
     }
 
@@ -282,6 +368,7 @@ public class Simulator implements Runnable {
                     );
                     e.printStackTrace(System.err);
                 }
+                System.err.println("DONE");
             }
 
             // int averageVehiclePerSegment = 24;

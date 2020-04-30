@@ -1,6 +1,7 @@
 import java.util.*;
+import java.util.concurrent.*;
 
-public class RoadSideUnit implements Runnable {
+public class RoadSideUnit implements Callable<Integer> {
     int id;
     float position;
     PhaserCustom timeSync;
@@ -94,8 +95,8 @@ public class RoadSideUnit implements Runnable {
         }
     }
 
-    public void run() {
-        while (currentTime <= stopTime) {
+    public Integer call() {
+        // while (currentTime <= stopTime) {
             // System.out.println("RSU     " + id + " starting interval " + currentTime);
             Channel targetChannel = mediumRef.channels[channelId];
             
@@ -165,9 +166,10 @@ public class RoadSideUnit implements Runnable {
                         break;
                 }
             }
-            timeSync.arriveAndAwaitAdvance();
+            // timeSync.arriveAndAwaitAdvance();
             currentTime++;
-        }
+        // }
+        return currentTime;
         // System.out.println("RSU     " + id + " stopped after " + stopTime + " ms.");   
     }
 }

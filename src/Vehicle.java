@@ -1,7 +1,7 @@
 import java.util.*;
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.*;
 
-public class Vehicle implements Runnable {
+public class Vehicle implements Callable<Integer> {
     int id;
     float position;
     float speed;
@@ -83,7 +83,7 @@ public class Vehicle implements Runnable {
     public void updatePosition() {
         float newPosition = position + (direction * speed * (currentTime - lastUpdated)) / 1000;
         if (newPosition > Config.ROAD_END) {
-            newPosition = Config.ROAD_END;
+            newPosition = Config.ROAD_END - 1;
             direction = -1;
         }
         else if (newPosition < Config.ROAD_START) {
@@ -317,8 +317,8 @@ public class Vehicle implements Runnable {
         }
     }
 
-    public void run() {
-        while (currentTime <= stopTime) {
+    public Integer call() {
+        // while (currentTime <= stopTime) {
             // System.out.println("Vehicle " + id + " starting interval " + currentTime);
             Channel targetChannel = mediumRef.channels[channelId];
 
@@ -455,9 +455,10 @@ public class Vehicle implements Runnable {
                 }
             }
             if (currentTime % 50 == 0) updatePosition();
-            timeSync.arriveAndAwaitAdvance();
+            // timeSync.arriveAndAwaitAdvance();
             currentTime++;
-        }
+        // }
+        return currentTime;
         // System.out.println("Vehicle " + id + " stopped after " + stopTime + " ms.");   
     }
 }
