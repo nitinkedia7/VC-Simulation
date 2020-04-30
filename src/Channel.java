@@ -1,12 +1,8 @@
 import java.util.*;
 import java.util.concurrent.locks.*;
-import java.util.concurrent.Phaser;
 
-public class Channel implements Runnable {
+public class Channel {
     int id;
-    int currentTime;
-    int stopTime;
-    Phaser timeSync;
     List<Packet> packetQueue;
     ReadWriteLock packetQueueLock;
 
@@ -23,12 +19,8 @@ public class Channel implements Runnable {
     List<Transmitter> transmitterPositions;
     Lock transmitterPositionsLock;
     
-    public Channel(int id, int stopTime, Phaser timeSync) {
+    public Channel(int id) {
         this.id = id;
-        this.currentTime = 0;
-        this.stopTime = stopTime;
-        this.timeSync = timeSync;
-        timeSync.register();
         packetQueue = new ArrayList<Packet>();
         packetQueueLock = new ReentrantReadWriteLock(Config.useFair);
         transmitterPositions = new LinkedList<Transmitter>();
@@ -49,18 +41,6 @@ public class Channel implements Runnable {
         transmitterPositionsLock.unlock();
         return true;
     }
-
-    // public void stopTransmit(int id) {
-    //     transmitterPositionsLock.lock();
-    //     Iterator<Transmitter> iterator = transmitterPositions.iterator();
-    //     while (iterator.hasNext()) {
-    //         Transmitter transmitter = iterator.next();
-    //         if (transmitter.id == id) {
-    //             iterator.remove();
-    //         }
-    //     }
-    //     transmitterPositionsLock.unlock();
-    // }
 
     public void transmitPacket(Packet packet, int currentTime, float currentPosition) {
         packetQueueLock.writeLock().lock();
@@ -90,22 +70,10 @@ public class Channel implements Runnable {
         return newPacketCount;
     }
 
-    private void cleanup() {
+    public void clearTransmitterPositions() {
         transmitterPositionsLock.lock();
-        // System.err.println("Interval " + currentTime + ": transmitter positions: "); 
-        // for (Transmitter t : transmitterPositions) {
-        //     System.err.println(t.id + "," + t.position + " "); 
-        // }
         transmitterPositions.clear();
         transmitterPositionsLock.unlock();
-    }
-
-    public void run() {
-        while (currentTime <= stopTime) {
-            timeSync.arriveAndAwaitAdvance();
-            cleanup();
-            timeSync.arriveAndAwaitAdvance();
-            currentTime++;
-        }
+        return;
     }
 }

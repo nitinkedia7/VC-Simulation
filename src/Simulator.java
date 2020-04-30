@@ -13,7 +13,7 @@ public class Simulator implements Runnable {
     ArrayList<Vehicle> vehicles;
     ArrayList<RoadSideUnit> roadSideUnits;
     Medium medium;
-    Phaser timeSync;
+    PhaserCustom timeSync;
     DecimalFormat decimalFormat;
     FileWriter csvFileWriter;
 
@@ -63,9 +63,11 @@ public class Simulator implements Runnable {
         totalVehicleCount = givenVehiclePerSegment * segmentCount;
         vehiclesPerSegment = givenVehiclePerSegment;
         averageVehicleSpeed = givenAverageVehicleSpeed;
-        timeSync = new Phaser();
+
+        medium = new Medium();
+        timeSync = new PhaserCustom(medium.getChannel(0));
         timeSync.register();
-        medium = new Medium(stopTime, timeSync);
+
         decimalFormat = new DecimalFormat();
         decimalFormat.setMaximumFractionDigits(4);
         csvFileWriter = fw;
@@ -232,7 +234,6 @@ public class Simulator implements Runnable {
     }
 
     public void run() {
-        new Thread(medium.getChannel(0)).start();
         for (RoadSideUnit rsu : roadSideUnits) {
             new Thread(rsu).start();
         }
@@ -244,7 +245,6 @@ public class Simulator implements Runnable {
             if (currentTime % 1000 == 0) {
                 System.out.println("Interval " + currentTime);
             }
-            timeSync.arriveAndAwaitAdvance();
             timeSync.arriveAndAwaitAdvance();
             currentTime++;
         }
@@ -261,47 +261,47 @@ public class Simulator implements Runnable {
             String logDirectoryPath = Config.LOG_PATH + System.currentTimeMillis();
             new File(logDirectoryPath).mkdirs();    
 
-            PrintStream console = System.out;
+            // PrintStream console = System.out;
             FileWriter fw = new FileWriter(logDirectoryPath + "/plot.csv", true);
             fw.write("Average Vehicle Density,Average Vehicle Speed (km/h),Requests Generated,Requests Serviced,Requests Queued,Average Cluster Overhead (Ratio),Clouds formed by RSU,Average Cloud Formation Time by RSU (ms),Clouds formed Distributedly,Average Cloud Formation Time Distributedly (ms),Leader Change Count\n");
             fw.flush();
 
-            // int avgVehicleSpeedKMPH = 60;
-            // for (int vehiclesPerSegment = 8; vehiclesPerSegment <= 36; vehiclesPerSegment += 4) {
-            //     try {
-            //         String logFilePath = String.format("%s/%d_%d.log", logDirectoryPath, vehiclesPerSegment, avgVehicleSpeedKMPH);
-            //         PrintStream logFile = new PrintStream(new File(logFilePath));
-            //         System.setOut(logFile);
-                    
-            //         Simulator simulator = new Simulator(vehiclesPerSegment, avgVehicleSpeedKMPH, fw);
-            //         simulator.run();
-            //         simulator.printStatistics();
-            //     } catch (Exception e) {
-            //         System.err.printf(
-            //             "Simulation with density %d and average speed %d failed.\n", vehiclesPerSegment, avgVehicleSpeedKMPH
-            //         );
-            //         e.printStackTrace(System.err);
-            //     }
-            // }
-
-            int averageVehiclePerSegment = 24;
-            for (int vehicleSpeedKMPH = 30; vehicleSpeedKMPH <= 90; vehicleSpeedKMPH += 10) {
-                if (vehicleSpeedKMPH == 60) continue;
+            int avgVehicleSpeedKMPH = 60;
+            for (int vehiclesPerSegment = 24; vehiclesPerSegment <= 24; vehiclesPerSegment += 4) {
                 try {
-                    String logFilePath = String.format("%s/%d_%d.log", logDirectoryPath, averageVehiclePerSegment, vehicleSpeedKMPH);
+                    String logFilePath = String.format("%s/%d_%d.log", logDirectoryPath, vehiclesPerSegment, avgVehicleSpeedKMPH);
                     PrintStream logFile = new PrintStream(new File(logFilePath));
                     System.setOut(logFile);
                     
-                    Simulator simulator = new Simulator(averageVehiclePerSegment, vehicleSpeedKMPH, fw);
+                    Simulator simulator = new Simulator(vehiclesPerSegment, avgVehicleSpeedKMPH, fw);
                     simulator.run();
                     simulator.printStatistics();
                 } catch (Exception e) {
                     System.err.printf(
-                        "Simulation with density %d and average speed %d failed.\n", averageVehiclePerSegment, vehicleSpeedKMPH
+                        "Simulation with density %d and average speed %d failed.\n", vehiclesPerSegment, avgVehicleSpeedKMPH
                     );
                     e.printStackTrace(System.err);
-                }    
+                }
             }
+
+            // int averageVehiclePerSegment = 24;
+            // for (int vehicleSpeedKMPH = 30; vehicleSpeedKMPH <= 90; vehicleSpeedKMPH += 10) {
+            //     if (vehicleSpeedKMPH == 60) continue;
+            //     try {
+            //         String logFilePath = String.format("%s/%d_%d.log", logDirectoryPath, averageVehiclePerSegment, vehicleSpeedKMPH);
+            //         PrintStream logFile = new PrintStream(new File(logFilePath));
+            //         System.setOut(logFile);
+                    
+            //         Simulator simulator = new Simulator(averageVehiclePerSegment, vehicleSpeedKMPH, fw);
+            //         simulator.run();
+            //         simulator.printStatistics();
+            //     } catch (Exception e) {
+            //         System.err.printf(
+            //             "Simulation with density %d and average speed %d failed.\n", averageVehiclePerSegment, vehicleSpeedKMPH
+            //         );
+            //         e.printStackTrace(System.err);
+            //     }    
+            // }
             fw.close();
         } catch (IOException ioe) {
             System.err.println("IOException: " + ioe.getMessage());

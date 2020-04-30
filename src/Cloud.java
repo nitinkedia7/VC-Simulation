@@ -12,12 +12,10 @@ public class Cloud {
     
     private class Request {
         int id;
-        int requestorId;
         int resourcesNeeded;
 
-        public Request(int id, int requestorId, int resourcesNeeded) {
+        public Request(int id, int resourcesNeeded) {
             this.id = id;
-            this.requestorId = requestorId;
             this.resourcesNeeded = resourcesNeeded;
         }
     }   
@@ -160,7 +158,7 @@ public class Cloud {
         int requestId = requestIdCounter;
         requestIdCounter++;
         // Add to pending request queue
-        pendingRequests.add(new Request(requestId, requestorId, resourcesNeeded));
+        pendingRequests.add(new Request(requestId, resourcesNeeded));
         simulatorRef.changeTotalRequestsQueued(true);
         // Also add as an member
         addMember(requestorId, reqPacket.offeredResources, reqPacket.velocity);
@@ -211,8 +209,8 @@ public class Cloud {
         }
         replenishResource(workerId, workDoneAmount);
         if (globalWorkStore.get(reqId).isEmpty()) {
+            // System.out.printf("Request %d serviced\n", reqId);
             globalWorkStore.remove(reqId);
-            System.out.printf("Request %d serviced\n", reqId);
             this.simulatorRef.incrTotalRequestsServiced();
         }
         return;

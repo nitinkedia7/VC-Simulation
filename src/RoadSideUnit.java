@@ -1,10 +1,9 @@
 import java.util.*;
-import java.util.concurrent.Phaser;
 
 public class RoadSideUnit implements Runnable {
     int id;
     float position;
-    Phaser timeSync;
+    PhaserCustom timeSync;
     int currentTime;
     int stopTime;
     int channelId;
@@ -17,7 +16,7 @@ public class RoadSideUnit implements Runnable {
     int backoffTime;
     int contentionWindowSize;
 
-    public RoadSideUnit(int id, float position, Phaser timeSync, Simulator simulatorRef, Medium mediumRef, int stopTime) {
+    public RoadSideUnit(int id, float position, PhaserCustom timeSync, Simulator simulatorRef, Medium mediumRef, int stopTime) {
         this.id = id;
         this.position = position;
         this.currentTime = 0;
@@ -166,7 +165,6 @@ public class RoadSideUnit implements Runnable {
                         break;
                 }
             }
-            timeSync.arriveAndAwaitAdvance();
             timeSync.arriveAndAwaitAdvance();
             currentTime++;
         }

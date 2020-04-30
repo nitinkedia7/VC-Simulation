@@ -1,5 +1,4 @@
 import java.util.*;
-import java.util.concurrent.Phaser;
 import java.util.concurrent.ThreadLocalRandom;
 
 public class Vehicle implements Runnable {
@@ -11,7 +10,7 @@ public class Vehicle implements Runnable {
     int lastUpdated;
     int currentTime;
     int stopTime;
-    Phaser timeSync;
+    PhaserCustom timeSync;
     Simulator simulatorRef;
     Medium mediumRef;
     Map<Integer, Cloud> clouds;
@@ -47,7 +46,7 @@ public class Vehicle implements Runnable {
     int pendingRequestGenTime;
     boolean hasPendingRequest;
 
-    public Vehicle(int id, Phaser timeSync, Simulator simulatorRef, Medium mediumRef, int stopTime, float averageSpeed) {
+    public Vehicle(int id, PhaserCustom timeSync, Simulator simulatorRef, Medium mediumRef, int stopTime, float averageSpeed) {
         this.id = id;        
         this.position = ThreadLocalRandom.current().nextFloat() * Config.ROAD_END;
         this.averageSpeed = averageSpeed;
@@ -455,8 +454,6 @@ public class Vehicle implements Runnable {
                         break;
                 }
             }
-            timeSync.arriveAndAwaitAdvance();
-            // Do offline work in this interval
             if (currentTime % 50 == 0) updatePosition();
             timeSync.arriveAndAwaitAdvance();
             currentTime++;
