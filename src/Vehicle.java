@@ -9,8 +9,6 @@ public class Vehicle implements Callable<Integer> {
     int direction;
     int lastUpdated;
     int currentTime;
-    int stopTime;
-    PhaserCustom timeSync;
     Simulator simulatorRef;
     Medium mediumRef;
     Map<Integer, Cloud> clouds;
@@ -46,7 +44,7 @@ public class Vehicle implements Callable<Integer> {
     int pendingRequestGenTime;
     boolean hasPendingRequest;
 
-    public Vehicle(int id, PhaserCustom timeSync, Simulator simulatorRef, Medium mediumRef, int stopTime, float averageSpeed) {
+    public Vehicle(int id, float averageSpeed, Simulator simulatorRef, Medium mediumRef) {
         this.id = id;        
         this.position = ThreadLocalRandom.current().nextFloat() * Config.ROAD_END;
         this.averageSpeed = averageSpeed;
@@ -55,7 +53,6 @@ public class Vehicle implements Callable<Integer> {
         if (this.direction == 0) this.direction = -1; 
         this.lastUpdated = 0;
         this.currentTime = 0;
-        this.stopTime = stopTime;
         this.simulatorRef = simulatorRef;
         this.mediumRef = mediumRef;
         this.clouds = new HashMap<Integer, Cloud>();
@@ -68,9 +65,6 @@ public class Vehicle implements Callable<Integer> {
         this.backoffTime = 0;
         this.contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
         this.hasPendingRequest = false;
-
-        this.timeSync = timeSync;
-        timeSync.register();
         // System.out.println("Vehicle " + id + " initialised at position " + this.position);
     } 
 
@@ -318,147 +312,143 @@ public class Vehicle implements Callable<Integer> {
     }
 
     public Integer call() {
-        // while (currentTime <= stopTime) {
-            // System.out.println("Vehicle " + id + " starting interval " + currentTime);
-            Channel targetChannel = mediumRef.channels[channelId];
+        // System.out.println("Vehicle " + id + " starting interval " + currentTime);
+        Channel targetChannel = mediumRef.channels[channelId];
 
-            if (!transmitQueue.isEmpty()) {
-                if (targetChannel.isFree(id, position)) {
-                    Packet packet = transmitQueue.poll();
-                    targetChannel.transmitPacket(packet, currentTime, position);    
-                }
+        if (!transmitQueue.isEmpty()) {
+            if (targetChannel.isFree(id, position)) {
+                Packet packet = transmitQueue.poll();
+                targetChannel.transmitPacket(packet, currentTime, position);    
             }
-            // Attempt to transmit packets in transmitQueue only if there are any pending packets
-            // if (!transmitQueue.isEmpty()) {
-            //     if (backoffTime == 0) {
-            //         if (targetChannel.isFree(id, position)) {
-            //             Packet packet = transmitQueue.poll();
-            //             targetChannel.transmitPacket(packet, currentTime, position);    
-            //             targetChannel.stopTransmit(id);
-            //             // Reset contention window
-            //             contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
-            //         }
-            //         else {
-            //             contentionWindowSize *= 2;
-            //             if (contentionWindowSize > Config.CONTENTION_WINDOW_MAX) {
-            //                 System.out.println("Vehicle could not transmit in backoff, retrying again");
-            //                 backoffTime = 0;
-            //                 contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
-            //             }
-            //             else {
-            //                 backoffTime = ThreadLocalRandom.current().nextInt(contentionWindowSize) + 1;
-            //             }
-            //         }
-            //     }
-            //     else {
-            //         if (targetChannel.isFree(id, position)) {
-            //             backoffTime--;
-            //             targetChannel.stopTransmit(id);
-            //         }
-            //     }
-            // }            
-            // Put processed work done (if any) to transmitQueue
-            while (!processQueue.isEmpty()) {
-                ProcessBlock nextBlock = processQueue.peek();
-                if (currentTime >= nextBlock.completionTime) {
-                    // System.out.println(id + " completed " + nextBlock.workAmount + " work at " + nextBlock.completionTime);
-                    Packet p = new Packet(simulatorRef, Config.PACKET_TYPE.PDONE, id, currentTime, nextBlock.appId, nextBlock.workAmount, nextBlock.reqId);
-                    handlePDONE(p);
-                    transmitQueue.add(p);
-                    processQueue.remove();
+        }
+        // Attempt to transmit packets in transmitQueue only if there are any pending packets
+        // if (!transmitQueue.isEmpty()) {
+        //     if (backoffTime == 0) {
+        //         if (targetChannel.isFree(id, position)) {
+        //             Packet packet = transmitQueue.poll();
+        //             targetChannel.transmitPacket(packet, currentTime, position);    
+        //             targetChannel.stopTransmit(id);
+        //             // Reset contention window
+        //             contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
+        //         }
+        //         else {
+        //             contentionWindowSize *= 2;
+        //             if (contentionWindowSize > Config.CONTENTION_WINDOW_MAX) {
+        //                 System.out.println("Vehicle could not transmit in backoff, retrying again");
+        //                 backoffTime = 0;
+        //                 contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
+        //             }
+        //             else {
+        //                 backoffTime = ThreadLocalRandom.current().nextInt(contentionWindowSize) + 1;
+        //             }
+        //         }
+        //     }
+        //     else {
+        //         if (targetChannel.isFree(id, position)) {
+        //             backoffTime--;
+        //             targetChannel.stopTransmit(id);
+        //         }
+        //     }
+        // }  
+
+        // Put processed work done (if any) to transmitQueue
+        while (!processQueue.isEmpty()) {
+            ProcessBlock nextBlock = processQueue.peek();
+            if (currentTime >= nextBlock.completionTime) {
+                // System.out.println(id + " completed " + nextBlock.workAmount + " work at " + nextBlock.completionTime);
+                Packet p = new Packet(simulatorRef, Config.PACKET_TYPE.PDONE, id, currentTime, nextBlock.appId, nextBlock.workAmount, nextBlock.reqId);
+                handlePDONE(p);
+                transmitQueue.add(p);
+                processQueue.remove();
+            }
+            else {
+                break;
+            }
+        }
+
+        if (hasPendingRequest) {
+            // Wait Config.MAX_WAIT_TIME for a RQUEUE message, if received OK, else self-initiate
+            if (currentTime >= pendingRequestGenTime + Config.MAX_RPRESENT_WAIT_TIME) {
+                selfInitiateCloudFormation();
+                hasPendingRequest = false;
+            }
+        } 
+        else {
+            // (Randomly) Request for an application
+            int hasRequest = ThreadLocalRandom.current().nextInt(Config.INV_RREQ_PROB);
+            int appId = ThreadLocalRandom.current().nextInt(Config.APPLICATION_TYPE_COUNT);
+            if (hasRequest == 1) {
+                if (clouds.get(appId) != null) {
+                    Packet rjoinPacket = new Packet(
+                        simulatorRef,
+                        Config.PACKET_TYPE.RJOIN,
+                        id,
+                        currentTime,
+                        speed * direction,
+                        appId,
+                        Config.APPLICATION_REQUIREMENT[pendingAppId],
+                        getRandomChunkSize()
+                    );
+                    transmitQueue.add(rjoinPacket);
+                    handleRJOIN(rjoinPacket);
                 }
                 else {
+                    // Save this request
+                    pendingRequestGenTime = currentTime;
+                    pendingAppId = appId;
+                    hasPendingRequest = true;
+                    // send a RPROBE to see if RSU/CL is present for this appId
+                    Packet probe = new Packet(simulatorRef, Config.PACKET_TYPE.RPROBE, id, currentTime, appId);
+                    transmitQueue.add(probe);
+                    handleRPROBE(probe);
+                }
+            }
+        }
+
+        // Also get and process receivedPackets
+        int newPacketCount = targetChannel.receivePackets(id, readTillIndex, currentTime, position, receiveQueue); 
+        readTillIndex += newPacketCount;
+        while (!receiveQueue.isEmpty()) {
+            Packet p = receiveQueue.poll();
+            assert p != null : "Read packet is NULL";      
+            
+            switch (p.type) {
+                case RREQ:
+                    handleRREQ(p);
                     break;
-                }
+                case RJOIN:
+                    handleRJOIN(p);
+                    break;
+                case RREP:
+                    handleRREP(p);
+                    break;
+                case RACK:
+                    handleRACK(p);
+                    break;
+                case RTEAR:
+                    handleRTEAR(p);
+                    break;
+                case PSTART:
+                    handlePSTART(p);
+                    break;
+                case PDONE:
+                    handlePDONE(p);
+                    break;
+                case RLEAVE:
+                    handleRLEAVE(p);
+                    break;
+                case RPROBE:
+                    handleRPROBE(p);
+                    break;
+                case RPRESENT:
+                    handleRPRESENT(p);
+                    break;
+                default:
+                    System.out.println("Unhandled packet type " + p.type);
+                    break;
             }
-
-            if (hasPendingRequest) {
-                // Wait Config.MAX_WAIT_TIME for a RQUEUE message, if received OK, else self-initiate
-                if (currentTime >= pendingRequestGenTime + Config.MAX_RPRESENT_WAIT_TIME) {
-                    selfInitiateCloudFormation();
-                    hasPendingRequest = false;
-                }
-            } 
-            else {
-                // (Randomly) Request for an application
-                int hasRequest = ThreadLocalRandom.current().nextInt(Config.INV_RREQ_PROB);
-                int appId = ThreadLocalRandom.current().nextInt(Config.APPLICATION_TYPE_COUNT);
-                if (hasRequest == 1) {
-                    if (clouds.get(appId) != null) {
-                        Packet rjoinPacket = new Packet(
-                            simulatorRef,
-                            Config.PACKET_TYPE.RJOIN,
-                            id,
-                            currentTime,
-                            speed * direction,
-                            appId,
-                            Config.APPLICATION_REQUIREMENT[pendingAppId],
-                            getRandomChunkSize()
-                        );
-                        transmitQueue.add(rjoinPacket);
-                        handleRJOIN(rjoinPacket);
-                    }
-                    else {
-                        // Save this request
-                        pendingRequestGenTime = currentTime;
-                        pendingAppId = appId;
-                        hasPendingRequest = true;
-                        // send a RPROBE to see if RSU/CL is present for this appId
-                        Packet probe = new Packet(simulatorRef, Config.PACKET_TYPE.RPROBE, id, currentTime, appId);
-                        transmitQueue.add(probe);
-                        handleRPROBE(probe);
-                    }
-                }
-            }
-
-            // Also get and process receivedPackets
-            int newPacketCount = targetChannel.receivePackets(id, readTillIndex, currentTime, position, receiveQueue); 
-            readTillIndex += newPacketCount;
-            while (!receiveQueue.isEmpty()) {
-                Packet p = receiveQueue.poll();
-                assert p != null : "Read packet is NULL";      
-                
-                switch (p.type) {
-                    case RREQ:
-                        handleRREQ(p);
-                        break;
-                    case RJOIN:
-                        handleRJOIN(p);
-                        break;
-                    case RREP:
-                        handleRREP(p);
-                        break;
-                    case RACK:
-                        handleRACK(p);
-                        break;
-                    case RTEAR:
-                        handleRTEAR(p);
-                        break;
-                    case PSTART:
-                        handlePSTART(p);
-                        break;
-                    case PDONE:
-                        handlePDONE(p);
-                        break;
-                    case RLEAVE:
-                        handleRLEAVE(p);
-                        break;
-                    case RPROBE:
-                        handleRPROBE(p);
-                        break;
-                    case RPRESENT:
-                        handleRPRESENT(p);
-                        break;
-                    default:
-                        System.out.println("Unhandled packet type " + p.type);
-                        break;
-                }
-            }
-            if (currentTime % 50 == 0) updatePosition();
-            // timeSync.arriveAndAwaitAdvance();
-            currentTime++;
-        // }
-        return currentTime;
-        // System.out.println("Vehicle " + id + " stopped after " + stopTime + " ms.");   
+        }
+        if (currentTime % 50 == 0) updatePosition();
+        return (++currentTime);
     }
 }

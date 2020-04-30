@@ -1,11 +1,10 @@
 import java.io.*;
 import java.util.*;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.text.DecimalFormat;
-import java.util.concurrent.*;
 
-public class Simulator implements Runnable {
+public class Simulator {
     int currentTime;
     int stopTime;
     int vehiclesPerSegment;
@@ -14,7 +13,6 @@ public class Simulator implements Runnable {
     ArrayList<Vehicle> vehicles;
     ArrayList<RoadSideUnit> roadSideUnits;
     Medium medium;
-    PhaserCustom timeSync;
     DecimalFormat decimalFormat;
     FileWriter csvFileWriter;
 
@@ -64,10 +62,7 @@ public class Simulator implements Runnable {
         totalVehicleCount = givenVehiclePerSegment * segmentCount;
         vehiclesPerSegment = givenVehiclePerSegment;
         averageVehicleSpeed = givenAverageVehicleSpeed;
-
         medium = new Medium();
-        timeSync = new PhaserCustom(medium.getChannel(0));
-        timeSync.register();
 
         decimalFormat = new DecimalFormat();
         decimalFormat.setMaximumFractionDigits(4);
@@ -93,7 +88,7 @@ public class Simulator implements Runnable {
         vehicles  = new ArrayList<Vehicle>();
         for (int i = 1; i <= totalVehicleCount; i++) {
             // givenAverageVehicleSpeed * 0.277 is to convert km/h to m/s
-            vehicles.add(new Vehicle(i, timeSync, this, medium, stopTime, givenAverageVehicleSpeed * 0.277f));
+            vehicles.add(new Vehicle(i, givenAverageVehicleSpeed * 0.277f, this, medium));
         }
 
         // Spawn RSU's in the mid of each (implicit) segment
@@ -102,7 +97,7 @@ public class Simulator implements Runnable {
         int rsuId = 1;
         while (rsuPosition < Config.ROAD_END) {
             if (rsuId % 2 == 1) { // Position RSU's at alternate segments
-                roadSideUnits.add(new RoadSideUnit(-1 * rsuId, rsuPosition, timeSync, this, medium, stopTime));
+                roadSideUnits.add(new RoadSideUnit(-1 * rsuId, rsuPosition, this, medium));
             }
             rsuPosition += Config.SEGMENT_LENGTH;
             rsuId++;
@@ -205,7 +200,7 @@ public class Simulator implements Runnable {
         System.out.println("RREP received by leader/RSU = " + rrepReceivecCount);
 
         String csvRow = String.format(
-            "%d,%d,%d,%d,%d,%s,%d,%s,%d,%s,%d\n",
+            "%d\t%d\t%d\t%d\t%d\t%s\t%d\t%s\t%d\t%s\t%d\n",
             vehiclesPerSegment,
             averageVehicleSpeed,
             packetStats.get(Config.PACKET_TYPE.RREQ).generatedCount.intValue() + packetStats.get(Config.PACKET_TYPE.RJOIN).generatedCount.intValue(),
@@ -275,32 +270,33 @@ public class Simulator implements Runnable {
         }
 
         public int getSegmentId() {
-            return 0;
-            // return (int) (position / 5 * Config.SEGMENT_LENGTH);
+            return (int) (position / Config.SEGMENT_LENGTH);
         }
     }
 
     public void run() { // Optimised run implementation
-        System.out.println("Simulation Started");
+        
         Map<Integer, List<Entity>> segmentMap = new HashMap<Integer, List<Entity>>();
-        List<Callable<Integer>> threadList = new ArrayList<Callable<Integer>>();
-        ExecutorService e = Executors.newFixedThreadPool(650);
+        List<Callable<Integer>> tasks = new ArrayList<Callable<Integer>>();
+        ExecutorService taskExecutor = Executors.newFixedThreadPool(vehiclesPerSegment * 2);
+        
+        System.out.println("Simulation Started");
         while (currentTime <= stopTime) {
             if (currentTime % 1000 == 0) {
                 System.out.println("Interval " + currentTime);
             }
             if (currentTime == 0 || currentTime % 50 == 1) {
                 segmentMap.clear();
-                for (int i = 0; i < totalVehicleCount; i++) {
-                    Entity entity = new Entity(vehicles.get(i), i);
+                for (int i = 0; i < roadSideUnits.size(); i++) {
+                    Entity entity = new Entity(roadSideUnits.get(i), i);
                     int segmentId = entity.getSegmentId();
                     if (!segmentMap.containsKey(segmentId)) {
                         segmentMap.put(segmentId, new LinkedList<Entity>());
                     }
                     segmentMap.get(segmentId).add(entity);
                 }
-                for (int i = 0; i < roadSideUnits.size(); i++) {
-                    Entity entity = new Entity(roadSideUnits.get(i), i);
+                for (int i = 0; i < totalVehicleCount; i++) {
+                    Entity entity = new Entity(vehicles.get(i), i);
                     int segmentId = entity.getSegmentId();
                     if (!segmentMap.containsKey(segmentId)) {
                         segmentMap.put(segmentId, new LinkedList<Entity>());
@@ -310,35 +306,34 @@ public class Simulator implements Runnable {
             }
             
             for (List<Entity> elist : segmentMap.values()) {
-                threadList.clear();
-                // Collections.shuffle(elist);
+                tasks.clear();
+                Collections.shuffle(elist);
                 for (Entity entity : elist) {
                     if (entity.id > 0) {
-                        threadList.add(vehicles.get(entity.index));
+                        tasks.add(vehicles.get(entity.index));
                     }
                     else {
-                        threadList.add(roadSideUnits.get(entity.index));
+                        tasks.add(roadSideUnits.get(entity.index));
                     }
                 }
                 try {
-                    e.invokeAll(threadList);
-                    // for (Thread thread : threadList) {
-                    //     thread.start();
-                    // }
-                    // for (Thread thread : threadList) {
-                    //     thread.join();
-                    // }
-                } catch (InterruptedException ex) {
+                    assert(tasks.size() <= 2 * vehiclesPerSegment);
+                    taskExecutor.invokeAll(tasks);
+                } 
+                catch (InterruptedException e) {
                     System.err.printf(
-                        "Simulation with density %d and average speed %d failed at time %d ms.\n", vehiclesPerSegment, averageVehicleSpeed, currentTime
+                        "Simulation with density %d and average speed %d failed at time %d ms.\n",
+                        vehiclesPerSegment,
+                        averageVehicleSpeed,
+                        currentTime
                     );
-                    ex.printStackTrace(System.err);
+                    e.printStackTrace(System.err);
                 }
             }
             medium.getChannel(0).clearTransmitterPositions();
             currentTime++;
         }
-        e.shutdown();
+        taskExecutor.shutdown();
         System.out.println("Simulation Finished after " + stopTime + " ms");
     }
 
@@ -349,45 +344,29 @@ public class Simulator implements Runnable {
 
             // PrintStream console = System.out;
             FileWriter fw = new FileWriter(logDirectoryPath + "/plot.csv", true);
-            fw.write("Average Vehicle Density,Average Vehicle Speed (km/h),Requests Generated,Requests Serviced,Requests Queued,Average Cluster Overhead (Ratio),Clouds formed by RSU,Average Cloud Formation Time by RSU (ms),Clouds formed Distributedly,Average Cloud Formation Time Distributedly (ms),Leader Change Count\n");
+            fw.write("Average Vehicle Density\tAverage Vehicle Speed (km/h)\tRequests Generated\tRequests Serviced\tRequests Queued\tAverage Cluster Overhead (Ratio)\tClouds formed by RSU\tAverage Cloud Formation Time by RSU (ms)\tClouds formed Distributedly\tAverage Cloud Formation Time Distributedly (ms)\tLeader Change Count\n");
             fw.flush();
 
             int avgVehicleSpeedKMPH = 60;
             for (int vehiclesPerSegment = 24; vehiclesPerSegment <= 24; vehiclesPerSegment += 4) {
-                try {
-                    String logFilePath = String.format("%s/%d_%d.log", logDirectoryPath, vehiclesPerSegment, avgVehicleSpeedKMPH);
-                    PrintStream logFile = new PrintStream(new File(logFilePath));
-                    System.setOut(logFile);
-                    
-                    Simulator simulator = new Simulator(vehiclesPerSegment, avgVehicleSpeedKMPH, fw);
-                    simulator.run();
-                    simulator.printStatistics();
-                } catch (Exception e) {
-                    System.err.printf(
-                        "Simulation with density %d and average speed %d failed.\n", vehiclesPerSegment, avgVehicleSpeedKMPH
-                    );
-                    e.printStackTrace(System.err);
-                }
-                System.err.println("DONE");
+                String logFilePath = String.format("%s/%d_%d.log", logDirectoryPath, vehiclesPerSegment, avgVehicleSpeedKMPH);
+                PrintStream logFile = new PrintStream(new File(logFilePath));
+                System.setOut(logFile);
+                
+                Simulator simulator = new Simulator(vehiclesPerSegment, avgVehicleSpeedKMPH, fw);
+                simulator.run();
+                simulator.printStatistics();
             }
 
             // int averageVehiclePerSegment = 24;
             // for (int vehicleSpeedKMPH = 30; vehicleSpeedKMPH <= 90; vehicleSpeedKMPH += 10) {
-            //     if (vehicleSpeedKMPH == 60) continue;
-            //     try {
-            //         String logFilePath = String.format("%s/%d_%d.log", logDirectoryPath, averageVehiclePerSegment, vehicleSpeedKMPH);
-            //         PrintStream logFile = new PrintStream(new File(logFilePath));
-            //         System.setOut(logFile);
-                    
-            //         Simulator simulator = new Simulator(averageVehiclePerSegment, vehicleSpeedKMPH, fw);
-            //         simulator.run();
-            //         simulator.printStatistics();
-            //     } catch (Exception e) {
-            //         System.err.printf(
-            //             "Simulation with density %d and average speed %d failed.\n", averageVehiclePerSegment, vehicleSpeedKMPH
-            //         );
-            //         e.printStackTrace(System.err);
-            //     }    
+            //     String logFilePath = String.format("%s/%d_%d.log", logDirectoryPath, averageVehiclePerSegment, vehicleSpeedKMPH);
+            //     PrintStream logFile = new PrintStream(new File(logFilePath));
+            //     System.setOut(logFile);
+                
+            //     Simulator simulator = new Simulator(averageVehiclePerSegment, vehicleSpeedKMPH, fw);
+            //     simulator.run();
+            //     simulator.printStatistics(); 
             // }
             fw.close();
         } catch (IOException ioe) {
