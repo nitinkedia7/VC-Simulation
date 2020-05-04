@@ -1,11 +1,11 @@
 # How to Compile
 1. Navigate to src/ folder by `cd src`
-2. Delete class files using `rm *.class`
-3. Compile by `javac Simulation.java`
+2. Delete class files using `find . -name "*.class" -type f - delete`
+3. Compile by `javac advanced/Simulation.java` or `javac classic/Simulation.java`
 
 # How to Run
-1. Regular run using `java Simulation`
-2. Run with assertions using `java -ea Simulation`
+1. Regular run using `java advanced.Simulation`
+2. Run with assertions using `java -ea advanced.Simulation`
 3. Run with [async-profiler](https://github.com/jvm-profiling-tools/async-profiler) using `java -agentpath:/home/nitin/async-profiler-1.7-linux-x64/build/libasyncProfiler.so=start,file=profile.svg Simulator`
 
 # Output
