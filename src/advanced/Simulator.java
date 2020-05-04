@@ -119,9 +119,12 @@ public class Simulator {
                 }
                 try {
                     assert(tasks.size() <= 2 * vehiclesPerSegment);
-                    taskExecutor.invokeAll(tasks);
+                    List<Future<Integer>> results =  taskExecutor.invokeAll(tasks);
+                    for (Future<Integer> result : results) {
+                        result.get();
+                    }
                 } 
-                catch (InterruptedException e) {
+                catch (InterruptedException | ExecutionException e) {
                     System.err.printf(
                         "Simulation with density %d and average speed %d failed at time %d ms.\n",
                         vehiclesPerSegment,

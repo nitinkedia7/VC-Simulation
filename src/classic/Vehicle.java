@@ -128,7 +128,7 @@ public class Vehicle implements Callable<Integer> {
     }
 
     private void handleRREP(Packet packet) {
-        assert(packet.getRequestorId() != id);
+        assert(packet.getSenderId() != id);
 
         Cloud cloud = clouds.get(packet.getRequestorId());
         if (cloud == null || !cloud.isCloudLeader(id)) return;
@@ -231,7 +231,7 @@ public class Vehicle implements Callable<Integer> {
                 id,
                 getRandomChunkSize()
             );
-            clouds.put(id, new Cloud(statsStore, -1, id, false, pendingRequestGenTime));
+            clouds.put(id, new Cloud(statsStore, pendingAppId, id, false, pendingRequestGenTime));
             clouds.get(id).addNewRequest(id, pendingAppId, reqPacket.getOfferedResources(), 0);
             transmitQueue.add(reqPacket);
         }
