@@ -154,7 +154,6 @@ public class Cloud {
     } 
 
     public void addNewRequest(int requestorId, int appId, int offeredResources, float velocity) {
-        assert(this.appId == appId);
         int requestId = requestIdCounter++;
         // Add to pending request queue
         pendingRequests.add(new Request(requestId, Config.APPLICATION_REQUIREMENT[appId]));
