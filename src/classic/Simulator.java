@@ -40,26 +40,12 @@ public class Simulator {
         statsStore.printStatistics(vehiclesPerSegment, averageVehicleSpeed, csvFileWriter);
     }
 
-    private class Entity {
-        int id;
-        int index;
-        float position;
-        
-        public Entity(Vehicle vehicle, int index) {
-            this.id = vehicle.id;
-            this.index = index;
-            this.position = vehicle.position;
-        }
-
-        public int getSegmentId() {
-            return (int) (position / Config.SEGMENT_LENGTH);
-        }
-    }
-
     public void run() { // Optimised run implementation
-        Map<Integer, List<Entity>> segmentMap = new HashMap<Integer, List<Entity>>();
+        ExecutorService taskExecutor = Executors.newFixedThreadPool(totalVehicleCount + 10);
         List<Callable<Integer>> tasks = new ArrayList<Callable<Integer>>();
-        ExecutorService taskExecutor = Executors.newFixedThreadPool(vehiclesPerSegment * 2);
+        for (Callable<Integer> vehicle : vehicles) {
+            tasks.add(vehicle);
+        }
         
         System.out.println("Simulation Started");
         while (currentTime <= stopTime) {
@@ -67,40 +53,21 @@ public class Simulator {
                 System.out.println("Interval " + currentTime);
                 // statsStore.printStatistics(vehiclesPerSegment, averageVehicleSpeed, csvFileWriter);
             }
-            if (currentTime == 0 || currentTime % 50 == 1) {
-                segmentMap.clear();
-                for (int i = 0; i < totalVehicleCount; i++) {
-                    Entity entity = new Entity(vehicles.get(i), i);
-                    int segmentId = entity.getSegmentId();
-                    if (!segmentMap.containsKey(segmentId)) {
-                        segmentMap.put(segmentId, new LinkedList<Entity>());
-                    }
-                    segmentMap.get(segmentId).add(entity);
+            Collections.shuffle(tasks);
+            try {
+                List<Future<Integer>> results = taskExecutor.invokeAll(tasks);
+                for (Future<Integer> result : results) {
+                    result.get();
                 }
-            }
-            
-            for (List<Entity> elist : segmentMap.values()) {
-                tasks.clear();
-                Collections.shuffle(elist);
-                for (Entity entity : elist) {
-                    tasks.add(vehicles.get(entity.index));
-                }
-                try {
-                    assert(tasks.size() <= 2 * vehiclesPerSegment);
-                    List<Future<Integer>> results = taskExecutor.invokeAll(tasks);
-                    for (Future<Integer> result : results) {
-                        result.get();
-                    }
-                } 
-                catch (InterruptedException | ExecutionException e) {
-                    System.err.printf(
-                        "Simulation with density %d and average speed %d failed at time %d ms.\n",
-                        vehiclesPerSegment,
-                        averageVehicleSpeed,
-                        currentTime
-                    );
-                    e.printStackTrace(System.err);
-                }
+            } 
+            catch (InterruptedException | ExecutionException e) {
+                System.err.printf(
+                    "Simulation with density %d and average speed %d failed at time %d ms.\n",
+                    vehiclesPerSegment,
+                    averageVehicleSpeed,
+                    currentTime
+                );
+                e.printStackTrace(System.err);
             }
             medium.getChannel(0).clearTransmitterPositions();
             currentTime++;
@@ -120,7 +87,7 @@ public class Simulator {
             fw.flush();
 
             int avgVehicleSpeedKMPH = 60;
-            for (int vehiclesPerSegment = 24; vehiclesPerSegment <= 24; vehiclesPerSegment += 4) {
+            for (int vehiclesPerSegment = 8; vehiclesPerSegment <= 36; vehiclesPerSegment += 4) {
                 String logFilePath = String.format("%s/%d_%d.log", logDirectoryPath, vehiclesPerSegment, avgVehicleSpeedKMPH);
                 PrintStream logFile = new PrintStream(new File(logFilePath));
                 System.setOut(logFile);

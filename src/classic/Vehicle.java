@@ -91,16 +91,20 @@ public class Vehicle implements Callable<Integer> {
         // Send out RLEAVE's if vehicle is inside a new segment
         if (hasSegmentChanged(position, newPosition)) {
             clouds.forEach((requestorId, cloud) -> {
-                if (cloud != null && cloud.isMember(id)) {
-                    transmitQueue.add(
-                        new PacketCustom(statsStore, Config.PACKET_TYPE.RLEAVE, id, currentTime, requestorId)
-                    );
-                }
-                if (cloud != null && cloud.isCloudLeader(id)) {
-                    statsStore.incrLeaderLeaveCount();
+                if (cloud != null) {
+                    if (cloud.isMember(id) && !cloud.isCloudLeader(id)) {
+                        transmitQueue.add(
+                            new PacketCustom(statsStore, Config.PACKET_TYPE.RLEAVE, id, currentTime, requestorId)
+                        );
+                    }
+                    if (cloud.isCloudLeader(id)) {
+                        statsStore.incrLeaderLeaveCount();
+                    }
                 }
             });
+            Cloud cloud = clouds.get(id);
             clouds.clear();
+            clouds.put(id, cloud);
             // Clear any pending requests
             hasPendingRequest = false;
         }
@@ -236,6 +240,14 @@ public class Vehicle implements Callable<Integer> {
             transmitQueue.add(reqPacket);
         }
         else {
+            Packet reqPacket = new PacketCustom (
+                statsStore,
+                Config.PACKET_TYPE.RREQ,
+                id,
+                currentTime,
+                id,
+                getRandomChunkSize()
+            );
             cloud.addNewRequest(id, pendingAppId, getRandomChunkSize(), 0);
             Map<Integer, Map<Integer,Integer>> newWorkStore = cloud.processPendingRequests();
             if (!newWorkStore.isEmpty()) {
