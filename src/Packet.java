@@ -5,8 +5,8 @@ public class Packet {
     int senderId;
     int genTime;   
     int appId;
-    double velocity;
-    double position;
+    float velocity;
+    float position;
     Cloud cloud;       
     int reqResources;
     int offeredResources;
@@ -29,7 +29,7 @@ public class Packet {
     }
 
     // Constructor for RREQ / RJOIN
-    public Packet(Simulator simulatorRef, Config.PACKET_TYPE type, int senderId, int genTime, double velocity, int appId, int reqResources, int offeredResources) {
+    public Packet(Simulator simulatorRef, Config.PACKET_TYPE type, int senderId, int genTime, float velocity, int appId, int reqResources, int offeredResources) {
         this(simulatorRef, type, senderId, genTime, appId);
         assert (type == Config.PACKET_TYPE.RREQ || type == Config.PACKET_TYPE.RJOIN) : "Packet constructor type mismatch";
         this.velocity = velocity;
@@ -38,7 +38,7 @@ public class Packet {
     }
 
     // Constructor for RREP
-    public Packet(Simulator simulatorRef, Config.PACKET_TYPE type, int senderId, int genTime, double velocity, int appId, int offeredResources) {
+    public Packet(Simulator simulatorRef, Config.PACKET_TYPE type, int senderId, int genTime, float velocity, int appId, int offeredResources) {
         this(simulatorRef, type, senderId, genTime, appId);
         assert (type == Config.PACKET_TYPE.RREP) : "Packet constructor type mismatch";
         this.velocity = velocity;
@@ -75,7 +75,7 @@ public class Packet {
         this.rsuReplied = rsuReplied;
     }
 
-    public void recordTransmission(int currentTime, double currentPosition) {
+    public void recordTransmission(int currentTime, float currentPosition) {
         this.position = currentPosition;
         simulatorRef.recordTransmission(type, currentTime - genTime);
     }

@@ -12,12 +12,10 @@ public class Cloud {
     
     private class Request {
         int id;
-        int requestorId;
         int resourcesNeeded;
 
-        public Request(int id, int requestorId, int resourcesNeeded) {
+        public Request(int id, int resourcesNeeded) {
             this.id = id;
-            this.requestorId = requestorId;
             this.resourcesNeeded = resourcesNeeded;
         }
     }   
@@ -50,10 +48,10 @@ public class Cloud {
 
     class Leader {
         int id;
-        double speed;
-        double LQI;
+        float speed;
+        float LQI;
 
-        public Leader(int id, double speed) {
+        public Leader(int id, float speed) {
             this.id = id;
             this.speed = speed;
             this.LQI = 0;
@@ -110,7 +108,7 @@ public class Cloud {
         return freeResourcesMap.containsKey(id);
     }
 
-    public void addMember(int id, int resourceLimit, double velocity) {
+    public void addMember(int id, int resourceLimit, float velocity) {
         assert(resourceLimit > 0);
         if (freeResourcesMap.containsKey(id)) {
             // already present
@@ -160,7 +158,7 @@ public class Cloud {
         int requestId = requestIdCounter;
         requestIdCounter++;
         // Add to pending request queue
-        pendingRequests.add(new Request(requestId, requestorId, resourcesNeeded));
+        pendingRequests.add(new Request(requestId, resourcesNeeded));
         simulatorRef.changeTotalRequestsQueued(true);
         // Also add as an member
         addMember(requestorId, reqPacket.offeredResources, reqPacket.velocity);
@@ -211,8 +209,8 @@ public class Cloud {
         }
         replenishResource(workerId, workDoneAmount);
         if (globalWorkStore.get(reqId).isEmpty()) {
+            // System.out.printf("Request %d serviced\n", reqId);
             globalWorkStore.remove(reqId);
-            System.out.printf("Request %d serviced\n", reqId);
             this.simulatorRef.incrTotalRequestsServiced();
         }
         return;

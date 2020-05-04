@@ -1,12 +1,10 @@
 import java.util.*;
-import java.util.concurrent.Phaser;
+import java.util.concurrent.*;
 
-public class RoadSideUnit implements Runnable {
+public class RoadSideUnit implements Callable<Integer> {
     int id;
-    double position;
-    Phaser timeSync;
+    float position;
     int currentTime;
-    int stopTime;
     int channelId;
     Queue<Packet> transmitQueue;
     Queue<Packet> receiveQueue;
@@ -17,11 +15,10 @@ public class RoadSideUnit implements Runnable {
     int backoffTime;
     int contentionWindowSize;
 
-    public RoadSideUnit(int id, double position, Phaser timeSync, Simulator simulatorRef, Medium mediumRef, int stopTime) {
+    public RoadSideUnit(int id, float position, Simulator simulatorRef, Medium mediumRef) {
         this.id = id;
         this.position = position;
         this.currentTime = 0;
-        this.stopTime = stopTime;
         this.simulatorRef = simulatorRef;
         this.mediumRef = mediumRef;
         this.channelId = 0;
@@ -29,8 +26,6 @@ public class RoadSideUnit implements Runnable {
         this.receiveQueue = new LinkedList<Packet>();
         this.readTillIndex = 0;
         this.clouds = new HashMap<Integer, Cloud>();
-        this.timeSync = timeSync;
-        timeSync.register();
         this.backoffTime = 0;
         this.contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
         // System.out.println("RSU     " + id + " initialised at position " + this.position);
@@ -95,81 +90,77 @@ public class RoadSideUnit implements Runnable {
         }
     }
 
-    public void run() {
-        while (currentTime <= stopTime) {
-            // System.out.println("RSU     " + id + " starting interval " + currentTime);
-            Channel targetChannel = mediumRef.channels[channelId];
-            
-            if (!transmitQueue.isEmpty()) {
-                if (targetChannel.isFree(id, position)) {
-                    Packet packet = transmitQueue.poll();
-                    targetChannel.transmitPacket(packet, currentTime, position);
-                }
+    public Integer call() {
+        // System.out.println("RSU     " + id + " starting interval " + currentTime);
+        Channel targetChannel = mediumRef.channels[channelId];
+        
+        if (!transmitQueue.isEmpty()) {
+            if (targetChannel.isFree(id, position)) {
+                Packet packet = transmitQueue.poll();
+                targetChannel.transmitPacket(packet, currentTime, position);
             }
-            // Attempt to transmit packets in transmitQueue only if there are any pending packets
-            // if (!transmitQueue.isEmpty()) {
-            //     if (backoffTime == 0) {
-            //         if (targetChannel.isFree(id, position)) {
-            //             Packet packet = transmitQueue.poll();
-            //             targetChannel.transmitPacket(packet, currentTime, position);
-            //             targetChannel.stopTransmit(id);
-            //             // Reset contention window
-            //             contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
-            //         }
-            //         else {
-            //             contentionWindowSize *= 2;
-            //             if (contentionWindowSize > Config.CONTENTION_WINDOW_MAX) {
-            //                 System.out.println("Vehicle could not transmit in backoff, retrying again");
-            //                 backoffTime = 0;
-            //                 contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
-            //             }
-            //             else {
-            //                 backoffTime = ThreadLocalRandom.current().nextInt(contentionWindowSize) + 1;
-            //             }
-            //         }
-            //     }
-            //     else {
-            //         if (targetChannel.isFree(id, position)) {
-            //             backoffTime--;
-            //             targetChannel.stopTransmit(id);
-            //         }
-            //     }
-            // }
-
-            // Also get and process receivedPackets
-            int newPacketCount = targetChannel.receivePackets(id, readTillIndex, currentTime, position, receiveQueue); 
-            readTillIndex += newPacketCount;
-            while (!receiveQueue.isEmpty()) {
-                Packet p = receiveQueue.poll();
-                assert p != null : "Read packet is NULL";                      
-                switch (p.type) {
-                    case RREQ:
-                        handleRREQ(p);
-                        break;
-                    case RJOIN:
-                        handleRJOIN(p);
-                        break;
-                    case RREP:
-                        handleRREP(p);
-                        break;
-                    case RACK:
-                        // RSU sends RACK, not process it
-                        break;
-                    case RTEAR:
-                        handleRTEAR(p);
-                        break;
-                    case RPROBE:
-                        handleRPROBE(p);
-                        break;
-                    default:
-                        // PSTART, PDONE are between VC members
-                        break;
-                }
-            }
-            timeSync.arriveAndAwaitAdvance();
-            timeSync.arriveAndAwaitAdvance();
-            currentTime++;
         }
-        // System.out.println("RSU     " + id + " stopped after " + stopTime + " ms.");   
+        // Attempt to transmit packets in transmitQueue only if there are any pending packets
+        // if (!transmitQueue.isEmpty()) {
+        //     if (backoffTime == 0) {
+        //         if (targetChannel.isFree(id, position)) {
+        //             Packet packet = transmitQueue.poll();
+        //             targetChannel.transmitPacket(packet, currentTime, position);
+        //             targetChannel.stopTransmit(id);
+        //             // Reset contention window
+        //             contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
+        //         }
+        //         else {
+        //             contentionWindowSize *= 2;
+        //             if (contentionWindowSize > Config.CONTENTION_WINDOW_MAX) {
+        //                 System.out.println("Vehicle could not transmit in backoff, retrying again");
+        //                 backoffTime = 0;
+        //                 contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
+        //             }
+        //             else {
+        //                 backoffTime = ThreadLocalRandom.current().nextInt(contentionWindowSize) + 1;
+        //             }
+        //         }
+        //     }
+        //     else {
+        //         if (targetChannel.isFree(id, position)) {
+        //             backoffTime--;
+        //             targetChannel.stopTransmit(id);
+        //         }
+        //     }
+        // }
+
+        // Also get and process receivedPackets
+        int newPacketCount = targetChannel.receivePackets(id, readTillIndex, currentTime, position, receiveQueue); 
+        readTillIndex += newPacketCount;
+        while (!receiveQueue.isEmpty()) {
+            Packet p = receiveQueue.poll();
+            assert p != null : "Read packet is NULL";                      
+            switch (p.type) {
+                case RREQ:
+                    handleRREQ(p);
+                    break;
+                case RJOIN:
+                    handleRJOIN(p);
+                    break;
+                case RREP:
+                    handleRREP(p);
+                    break;
+                case RACK:
+                    // RSU sends RACK, not process it
+                    break;
+                case RTEAR:
+                    handleRTEAR(p);
+                    break;
+                case RPROBE:
+                    handleRPROBE(p);
+                    break;
+                default:
+                    // PSTART, PDONE are between VC members
+                    break;
+            }
+        }
+        currentTime++;
+        return currentTime;
     }
 }

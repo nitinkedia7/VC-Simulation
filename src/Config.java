@@ -1,14 +1,14 @@
 public class Config {
     static int STOP_TIME = 30000;
-    static double ROAD_END = 15000.0; // m
-    static double ROAD_START = 0.0;
+    static float ROAD_END = 15000.0f; // m
+    static float ROAD_START = 0.0f;
 
-    static double VEHICLE_SPEED_MIN = 0; // m/s
-    static double VEHICLE_SPEED_MAX = 27.78; // m/s
-    static double VEHICLE_SPEED_STD_DEV = 1.00;
+    static float VEHICLE_SPEED_MIN = 0; // m/s
+    static float VEHICLE_SPEED_MAX = 27.78f; // m/s
+    static float VEHICLE_SPEED_STD_DEV = 1.00f;
 
-    static double SEGMENT_LENGTH = 600;
-    static double TRANSMISSION_RANGE = 300;
+    static float SEGMENT_LENGTH = 600;
+    static float TRANSMISSION_RANGE = 300;
     static enum PACKET_TYPE {
         RREQ, RJOIN, RREP, RACK, RTEAR, PSTART, PDONE, RLEAVE, RPROBE, RPRESENT;
     }
