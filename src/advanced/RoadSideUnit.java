@@ -1,5 +1,8 @@
+package advanced;
+
 import java.util.*;
 import java.util.concurrent.*;
+import infrastructure.*;
 
 public class RoadSideUnit implements Callable<Integer> {
     int id;
@@ -10,16 +13,16 @@ public class RoadSideUnit implements Callable<Integer> {
     Queue<Packet> receiveQueue;
     int readTillIndex;
     Map<Integer, Cloud> clouds;
-    Simulator simulatorRef;
+    Statistics statsStore;
     Medium mediumRef;
     int backoffTime;
     int contentionWindowSize;
 
-    public RoadSideUnit(int id, float position, Simulator simulatorRef, Medium mediumRef) {
+    public RoadSideUnit(int id, float position, Statistics statsStore, Medium mediumRef) {
         this.id = id;
         this.position = position;
         this.currentTime = 0;
-        this.simulatorRef = simulatorRef;
+        this.statsStore = statsStore;
         this.mediumRef = mediumRef;
         this.channelId = 0;
         this.transmitQueue = new LinkedList<Packet>();
@@ -32,67 +35,84 @@ public class RoadSideUnit implements Callable<Integer> {
     }
 
     public void handleRREQ(Packet reqPacket) {
-        Cloud cloud = clouds.get(reqPacket.appId);
-        if (cloud == null) { // RSU starts making a cloud
-            clouds.put(reqPacket.appId, new Cloud(simulatorRef, reqPacket.appId, id, true, reqPacket.genTime));
-            clouds.get(reqPacket.appId).addNewRequest(reqPacket);
+        Cloud cloud = clouds.get(reqPacket.getAppId());
+        // System.out.println("RSU got request from id " + reqPacket.getSenderId());
+        if (cloud == null) {
+            clouds.put(reqPacket.getAppId(), new Cloud(statsStore, reqPacket.getAppId(), id, true, reqPacket.getGenTime()));
+            clouds.get(reqPacket.getAppId()).addNewRequest(
+                reqPacket.getSenderId(),
+                reqPacket.getAppId(),
+                reqPacket.getOfferedResources(),
+                reqPacket.getVelocity()
+            );
         }
         else if (cloud.isCloudLeader(id)) {
-            cloud.addNewRequest(reqPacket);
+            cloud.addNewRequest(
+                reqPacket.getSenderId(),
+                reqPacket.getAppId(),
+                reqPacket.getOfferedResources(),
+                reqPacket.getVelocity()  
+            );
         }
     }
 
     public void handleRJOIN(Packet p) {
         // If this vehicle is the leader then it enqueues it
-        Cloud cloud = clouds.get(p.appId);
+        Cloud cloud = clouds.get(p.getAppId());
         if (cloud != null && cloud.isCloudLeader(id)) {
-            cloud.addNewRequest(p);
+            cloud.addNewRequest(
+                p.getSenderId(),
+                p.getAppId(),
+                p.getOfferedResources(),
+                p.getVelocity()
+            );
         }
     }
 
     public void handleRREP(Packet donorPacket) {
-        Cloud cloud = clouds.get(donorPacket.appId);
+        Cloud cloud = clouds.get(donorPacket.getAppId());
         if (cloud == null) {
-            System.out.println("No cloud present for app " + donorPacket.appId);
+            System.out.println("No cloud present for app " + donorPacket.getAppId());
             return;
         }
         if (!cloud.isCloudLeader(id)) {
             return;
         }
-        simulatorRef.incrRrepReceiveCount();
-        cloud.addMember(donorPacket.senderId, donorPacket.offeredResources, donorPacket.velocity);
+        statsStore.incrRrepReceiveCount();
+        cloud.addMember(donorPacket.getSenderId(), donorPacket.getOfferedResources(), donorPacket.getVelocity());
         if (cloud.justMetResourceQuota()) {
             cloud.electLeader();
-            transmitQueue.add(new Packet(simulatorRef, Config.PACKET_TYPE.RACK, id, currentTime, donorPacket.appId, cloud));
+            transmitQueue.add(new PacketCustom(statsStore, Config.PACKET_TYPE.RACK, id, currentTime, donorPacket.getAppId(), cloud));
         }
     }
 
     public void handleRPROBE(Packet probe) {
-        Cloud cloud = clouds.get(probe.appId);
+        Cloud cloud = clouds.get(probe.getAppId());
         if (cloud == null) {
-            Packet presentPacket = new Packet(simulatorRef, Config.PACKET_TYPE.RPRESENT, id, currentTime, probe.appId, probe.senderId, true);
+            // System.out.println("RSU got probe from id " + probe.getSenderId());
+            Packet presentPacket = new PacketCustom(statsStore, Config.PACKET_TYPE.RPRESENT, id, currentTime, probe.getAppId(), probe.getSenderId(), true);
             transmitQueue.add(presentPacket);
         }
         else if (cloud.isCloudLeader(id)) {
             // RSU replies as a leader since cloud formation has RREP's
-            Packet presentPacket = new Packet(simulatorRef, Config.PACKET_TYPE.RPRESENT, id, currentTime, probe.appId, probe.senderId, false);
+            Packet presentPacket = new PacketCustom(statsStore, Config.PACKET_TYPE.RPRESENT, id, currentTime, probe.getAppId(), probe.getSenderId(), false);
             transmitQueue.add(presentPacket);
         }
     }
 
     public void handleRTEAR(Packet tearPacket) {
-        Cloud cloud = clouds.get(tearPacket.appId);
-        if (cloud == null || !cloud.isCloudLeader(tearPacket.senderId)) {
+        Cloud cloud = clouds.get(tearPacket.getAppId());
+        if (cloud == null || !cloud.isCloudLeader(tearPacket.getSenderId())) {
             return;
         }
         else {
-            clouds.remove(tearPacket.appId);
+            clouds.remove(tearPacket.getAppId());
         }
     }
 
     public Integer call() {
         // System.out.println("RSU     " + id + " starting interval " + currentTime);
-        Channel targetChannel = mediumRef.channels[channelId];
+        Channel targetChannel = mediumRef.getChannel(channelId);
         
         if (!transmitQueue.isEmpty()) {
             if (targetChannel.isFree(id, position)) {
@@ -136,7 +156,7 @@ public class RoadSideUnit implements Callable<Integer> {
         while (!receiveQueue.isEmpty()) {
             Packet p = receiveQueue.poll();
             assert p != null : "Read packet is NULL";                      
-            switch (p.type) {
+            switch (p.getType()) {
                 case RREQ:
                     handleRREQ(p);
                     break;

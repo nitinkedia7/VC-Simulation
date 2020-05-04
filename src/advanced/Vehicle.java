@@ -1,5 +1,8 @@
+package advanced;
+
 import java.util.*;
 import java.util.concurrent.*;
+import infrastructure.*;
 
 public class Vehicle implements Callable<Integer> {
     int id;
@@ -9,7 +12,7 @@ public class Vehicle implements Callable<Integer> {
     int direction;
     int lastUpdated;
     int currentTime;
-    Simulator simulatorRef;
+    Statistics statsStore;
     Medium mediumRef;
     Map<Integer, Cloud> clouds;
     int channelId;
@@ -44,7 +47,7 @@ public class Vehicle implements Callable<Integer> {
     int pendingRequestGenTime;
     boolean hasPendingRequest;
 
-    public Vehicle(int id, float averageSpeed, Simulator simulatorRef, Medium mediumRef) {
+    public Vehicle(int id, float averageSpeed, Statistics statsStore, Medium mediumRef) {
         this.id = id;        
         this.position = ThreadLocalRandom.current().nextFloat() * Config.ROAD_END;
         this.averageSpeed = averageSpeed;
@@ -53,7 +56,7 @@ public class Vehicle implements Callable<Integer> {
         if (this.direction == 0) this.direction = -1; 
         this.lastUpdated = 0;
         this.currentTime = 0;
-        this.simulatorRef = simulatorRef;
+        this.statsStore = statsStore;
         this.mediumRef = mediumRef;
         this.clouds = new HashMap<Integer, Cloud>();
         this.channelId = 0;
@@ -90,11 +93,11 @@ public class Vehicle implements Callable<Integer> {
             clouds.forEach((appId, cloud) -> {
                 if (cloud != null && cloud.isMember(id)) {
                     transmitQueue.add(
-                        new Packet(simulatorRef, Config.PACKET_TYPE.RLEAVE, id, currentTime, appId)
+                        new PacketCustom(statsStore, Config.PACKET_TYPE.RLEAVE, id, currentTime, appId)
                     );
                 }
                 if (cloud != null && cloud.isCloudLeader(id)) {
-                    simulatorRef.incrLeaderLeaveCount();
+                    statsStore.incrLeaderLeaveCount();
                 }
             });
             clouds.clear();
@@ -118,29 +121,39 @@ public class Vehicle implements Callable<Integer> {
         return Config.WORK_CHUNK_SIZE * multiplier;
     }
 
-    public void handleRREQ(Packet p) {
+    public void handleRREQ(Packet reqPacket) {
         // If this vehicle is the leader then it enqueues it
-        Cloud cloud = clouds.get(p.appId);
+        Cloud cloud = clouds.get(reqPacket.getAppId());
         if (cloud != null && cloud.isCloudLeader(id)) {
-            cloud.addNewRequest(p);
+            cloud.addNewRequest(
+                reqPacket.getSenderId(),
+                reqPacket.getAppId(),
+                reqPacket.getOfferedResources(),
+                reqPacket.getVelocity()
+            );
         }
 
         // Also send a RREP, if someone else's request
-        if (p.senderId != id) {
-            Packet rrepPacket = new Packet(simulatorRef, Config.PACKET_TYPE.RREP, id, currentTime, direction * speed, p.appId, getRandomChunkSize());
+        if (reqPacket.getSenderId() != id) {
+            Packet rrepPacket = new PacketCustom(statsStore, Config.PACKET_TYPE.RREP, id, currentTime, direction * speed, reqPacket.getAppId(), getRandomChunkSize());
             transmitQueue.add(rrepPacket);
             handleRREP(rrepPacket);
         }
     }
 
-    public void handleRJOIN(Packet p) {
+    public void handleRJOIN(Packet reqPacket) {
         // If this vehicle is the leader then it enqueues it
-        Cloud cloud = clouds.get(p.appId);
+        Cloud cloud = clouds.get(reqPacket.getAppId());
         if (cloud != null && cloud.isCloudLeader(id)) {
-            cloud.addNewRequest(p);
+            cloud.addNewRequest(
+                reqPacket.getSenderId(),
+                reqPacket.getAppId(),
+                reqPacket.getOfferedResources(),
+                reqPacket.getVelocity()
+            );
             Map<Integer, Map<Integer,Integer>> newWorkStore = cloud.processPendingRequests();
             if (!newWorkStore.isEmpty()) {
-                Packet pstartPacket = new Packet(simulatorRef, Config.PACKET_TYPE.PSTART, id, currentTime, cloud.appId, newWorkStore);
+                Packet pstartPacket = new PacketCustom(statsStore, Config.PACKET_TYPE.PSTART, id, currentTime, reqPacket.getAppId(), newWorkStore);
                 transmitQueue.add(pstartPacket);
                 handlePSTART(pstartPacket);
             }
@@ -148,75 +161,75 @@ public class Vehicle implements Callable<Integer> {
     }
 
     public void handleRREP(Packet donorPacket) {
-        Cloud cloud = clouds.get(donorPacket.appId);
+        Cloud cloud = clouds.get(donorPacket.getAppId());
         if (cloud == null || !cloud.isCloudLeader(id)) return;
-        simulatorRef.incrRrepReceiveCount();
-        cloud.addMember(donorPacket.senderId, donorPacket.offeredResources, donorPacket.velocity);
+        statsStore.incrRrepReceiveCount();
+        cloud.addMember(donorPacket.getSenderId(), donorPacket.getOfferedResources(), donorPacket.getVelocity());
         if (cloud.justMetResourceQuota()) {
             cloud.electLeader();
-            Packet ackPacket = new Packet(simulatorRef, Config.PACKET_TYPE.RACK, id, currentTime, donorPacket.appId, cloud);
+            Packet ackPacket = new PacketCustom(statsStore, Config.PACKET_TYPE.RACK, id, currentTime, donorPacket.getAppId(), cloud);
             transmitQueue.add(ackPacket);
-            clouds.remove(donorPacket.appId);
+            clouds.remove(donorPacket.getAppId());
             handleRACK(ackPacket);
         }
     }   
 
     public void handleRACK(Packet ackPacket) {
         // Save this cloud
-        Cloud cloud = ackPacket.cloud;
-        clouds.put(ackPacket.appId, cloud);
+        Cloud cloud = ackPacket.getCloud();
+        clouds.put(ackPacket.getAppId(), cloud);
         if (cloud != null && cloud.isCloudLeader(id)) {
             cloud.recordCloudFormed(currentTime);
             // cloud.printStats();
             Map<Integer, Map<Integer,Integer>> workAssignment = cloud.processPendingRequests();
-            Packet pstartPacket = new Packet(simulatorRef, Config.PACKET_TYPE.PSTART, id, currentTime, cloud.appId, workAssignment);
+            Packet pstartPacket = new PacketCustom(statsStore, Config.PACKET_TYPE.PSTART, id, currentTime, ackPacket.getAppId(), workAssignment);
             transmitQueue.add(pstartPacket);
             handlePSTART(pstartPacket); // honor self-contribution
         }
     }
     
     public void handlePSTART(Packet startPacket) {
-        startPacket.workAssignment.forEach((reqId, appWorkAssignment) -> {
+        startPacket.getWorkAssignment().forEach((reqId, appWorkAssignment) -> {
             int assignedWork = appWorkAssignment.getOrDefault(id, 0);
             if (assignedWork > 0) {
                 // Add an alarm for contribution
-                processQueue.add(new ProcessBlock(startPacket.appId, reqId, assignedWork));
+                processQueue.add(new ProcessBlock(startPacket.getAppId(), reqId, assignedWork));
             }
         });
         return;
     }
 
     public void handlePDONE(Packet donePacket) {
-        Cloud cloud = clouds.get(donePacket.appId);
+        Cloud cloud = clouds.get(donePacket.getAppId());
         if (cloud == null || !cloud.isCloudLeader(id)) return;
-        cloud.markAsDone(donePacket.reqId, donePacket.senderId, donePacket.workDoneAmount);
+        cloud.markAsDone(donePacket.getRequestId(), donePacket.getSenderId(), donePacket.getWorkDoneAmount());
         
         Map<Integer, Map<Integer,Integer>> newWorkStore = cloud.processPendingRequests();
         if (!newWorkStore.isEmpty()) {
-            Packet pstartPacket = new Packet(simulatorRef, Config.PACKET_TYPE.PSTART, id, currentTime, cloud.appId, newWorkStore);
+            Packet pstartPacket = new PacketCustom(statsStore, Config.PACKET_TYPE.PSTART, id, currentTime, donePacket.getAppId(), newWorkStore);
             transmitQueue.add(pstartPacket);
             handlePSTART(pstartPacket);
         }
         else if (cloud.globalWorkStore.isEmpty()) {
-            Packet tearPacket = new Packet(simulatorRef, Config.PACKET_TYPE.RTEAR, id, currentTime, donePacket.appId);
+            Packet tearPacket = new PacketCustom(statsStore, Config.PACKET_TYPE.RTEAR, id, currentTime, donePacket.getAppId());
             transmitQueue.add(tearPacket);
-            clouds.remove(donePacket.appId);
+            clouds.remove(donePacket.getAppId());
         }
     }
 
     public void handleRLEAVE(Packet packet) {
-        Cloud cloud = clouds.get(packet.appId);
+        Cloud cloud = clouds.get(packet.getAppId());
         if (cloud == null) return;
 
         // First, reassign leader if needed
-        if (cloud.isCloudLeader(packet.senderId) && cloud.isNextLeader(id)) {
+        if (cloud.isCloudLeader(packet.getSenderId()) && cloud.isNextLeader(id)) {
             cloud.assignNextLeader();
-            simulatorRef.incrLeaderChangeCount();
+            statsStore.incrLeaderChangeCount();
         }
         // Then reassign the left work
         if (cloud.isCloudLeader(id)) {
-            Map<Integer, Map<Integer,Integer>> workAssignment = cloud.reassignWork(packet.senderId);
-            Packet pstartPacket = new Packet(simulatorRef, Config.PACKET_TYPE.PSTART, id, currentTime, cloud.appId, workAssignment);
+            Map<Integer, Map<Integer,Integer>> workAssignment = cloud.reassignWork(packet.getSenderId());
+            Packet pstartPacket = new PacketCustom(statsStore, Config.PACKET_TYPE.PSTART, id, currentTime, packet.getAppId(), workAssignment);
             transmitQueue.add(pstartPacket);
             handlePSTART(pstartPacket);
         }
@@ -227,41 +240,52 @@ public class Vehicle implements Callable<Integer> {
         // Ensure that no cloud this appId exists till now
         Cloud cloud = clouds.get(pendingAppId);
         if (cloud != null) {
-            Packet rjoinPacket = new Packet(
-                simulatorRef,
+            Packet rjoinPacket = new PacketCustom (
+                statsStore,
                 Config.PACKET_TYPE.RJOIN,
                 id,
                 currentTime,
                 speed * direction,
                 pendingAppId,
-                Config.APPLICATION_REQUIREMENT[pendingAppId],
                 getRandomChunkSize()
             );
             transmitQueue.add(rjoinPacket);
             handleRJOIN(rjoinPacket);
         }
         else {
-            Packet reqPacket = new Packet(
-                simulatorRef,
+            Packet reqPacket = new PacketCustom (
+                statsStore,
                 Config.PACKET_TYPE.RREQ,
                 id,
                 currentTime,
                 speed * direction,
                 pendingAppId,
-                Config.APPLICATION_REQUIREMENT[pendingAppId],
                 getRandomChunkSize()
             );
-            clouds.put(reqPacket.appId, new Cloud(simulatorRef, reqPacket.appId, id, false, pendingRequestGenTime));
-            clouds.get(reqPacket.appId).addNewRequest(reqPacket);
+            clouds.put(reqPacket.getAppId(), new Cloud(statsStore, reqPacket.getAppId(), id, false, pendingRequestGenTime));
+            clouds.get(reqPacket.getAppId()).addNewRequest(
+                reqPacket.getSenderId(),
+                reqPacket.getAppId(),
+                reqPacket.getOfferedResources(),
+                reqPacket.getVelocity() 
+            );
             transmitQueue.add(reqPacket);
         }
     }
 
     public void handleRPROBE(Packet probe) {
-        Cloud cloud = clouds.get(probe.appId);
+        Cloud cloud = clouds.get(probe.getAppId());
         if (cloud != null && cloud.isCloudLeader(id)) {
             // send RPRESENT
-            Packet presentPacket = new Packet(simulatorRef, Config.PACKET_TYPE.RPRESENT, id, currentTime, probe.appId, probe.senderId, false);
+            Packet presentPacket = new PacketCustom (
+                statsStore,
+                Config.PACKET_TYPE.RPRESENT,
+                id,
+                currentTime,
+                probe.getAppId(),
+                probe.getSenderId(),
+                false
+            );
             transmitQueue.add(presentPacket);
             handleRPRESENT(presentPacket);
         }
@@ -269,31 +293,29 @@ public class Vehicle implements Callable<Integer> {
 
     public void handleRPRESENT(Packet packet) {
         if (!hasPendingRequest) return;
-        if (!(packet.appId == pendingAppId && packet.requestorId == id)) return;
+        if (!(packet.getAppId() == pendingAppId && packet.getRequestorId() == id)) return;
 
         hasPendingRequest = false;
-        if (packet.rsuReplied) {
-            Packet rreqPacket = new Packet(
-                simulatorRef,
+        if (packet.didRsuReply()) {
+            Packet rreqPacket = new PacketCustom (
+                statsStore,
                 Config.PACKET_TYPE.RREQ,
                 id,
                 currentTime,
                 speed * direction,
                 pendingAppId,
-                Config.APPLICATION_REQUIREMENT[pendingAppId],
                 getRandomChunkSize()
             );
             transmitQueue.add(rreqPacket);
             handleRREQ(rreqPacket);
         }
         else {
-            Packet rjoinPacket = new Packet(
-                simulatorRef,
+            Packet rjoinPacket = new PacketCustom (
+                statsStore,
                 Config.PACKET_TYPE.RJOIN,
                 id, currentTime,
                 speed * direction,
                 pendingAppId,
-                Config.APPLICATION_REQUIREMENT[pendingAppId],
                 getRandomChunkSize()
             );
             transmitQueue.add(rjoinPacket);
@@ -302,18 +324,18 @@ public class Vehicle implements Callable<Integer> {
     }
 
     public void handleRTEAR(Packet tearPacket) {
-        Cloud cloud = clouds.get(tearPacket.appId);
-        if (cloud == null || !cloud.isCloudLeader(tearPacket.senderId)) {
+        Cloud cloud = clouds.get(tearPacket.getAppId());
+        if (cloud == null || !cloud.isCloudLeader(tearPacket.getSenderId())) {
             return;
         }
         else {
-            clouds.remove(tearPacket.appId);
+            clouds.remove(tearPacket.getAppId());
         }
     }
 
     public Integer call() {
         // System.out.println("Vehicle " + id + " starting interval " + currentTime);
-        Channel targetChannel = mediumRef.channels[channelId];
+        Channel targetChannel = mediumRef.getChannel(channelId);
 
         if (!transmitQueue.isEmpty()) {
             if (targetChannel.isFree(id, position)) {
@@ -356,7 +378,7 @@ public class Vehicle implements Callable<Integer> {
             ProcessBlock nextBlock = processQueue.peek();
             if (currentTime >= nextBlock.completionTime) {
                 // System.out.println(id + " completed " + nextBlock.workAmount + " work at " + nextBlock.completionTime);
-                Packet p = new Packet(simulatorRef, Config.PACKET_TYPE.PDONE, id, currentTime, nextBlock.appId, nextBlock.workAmount, nextBlock.reqId);
+                Packet p = new PacketCustom(statsStore, Config.PACKET_TYPE.PDONE, id, currentTime, nextBlock.appId, nextBlock.workAmount, nextBlock.reqId);
                 handlePDONE(p);
                 transmitQueue.add(p);
                 processQueue.remove();
@@ -379,14 +401,13 @@ public class Vehicle implements Callable<Integer> {
             int appId = ThreadLocalRandom.current().nextInt(Config.APPLICATION_TYPE_COUNT);
             if (hasRequest == 1) {
                 if (clouds.get(appId) != null) {
-                    Packet rjoinPacket = new Packet(
-                        simulatorRef,
+                    Packet rjoinPacket = new PacketCustom (
+                        statsStore,
                         Config.PACKET_TYPE.RJOIN,
                         id,
                         currentTime,
                         speed * direction,
                         appId,
-                        Config.APPLICATION_REQUIREMENT[pendingAppId],
                         getRandomChunkSize()
                     );
                     transmitQueue.add(rjoinPacket);
@@ -398,7 +419,7 @@ public class Vehicle implements Callable<Integer> {
                     pendingAppId = appId;
                     hasPendingRequest = true;
                     // send a RPROBE to see if RSU/CL is present for this appId
-                    Packet probe = new Packet(simulatorRef, Config.PACKET_TYPE.RPROBE, id, currentTime, appId);
+                    Packet probe = new PacketCustom(statsStore, Config.PACKET_TYPE.RPROBE, id, currentTime, appId);
                     transmitQueue.add(probe);
                     handleRPROBE(probe);
                 }
@@ -412,7 +433,7 @@ public class Vehicle implements Callable<Integer> {
             Packet p = receiveQueue.poll();
             assert p != null : "Read packet is NULL";      
             
-            switch (p.type) {
+            switch (p.getType()) {
                 case RREQ:
                     handleRREQ(p);
                     break;
@@ -444,7 +465,7 @@ public class Vehicle implements Callable<Integer> {
                     handleRPRESENT(p);
                     break;
                 default:
-                    System.out.println("Unhandled packet type " + p.type);
+                    System.out.println("Unhandled packet type " + p.getType());
                     break;
             }
         }

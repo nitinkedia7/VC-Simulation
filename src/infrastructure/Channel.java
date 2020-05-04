@@ -1,3 +1,5 @@
+package infrastructure; 
+
 import java.util.*;
 import java.util.concurrent.locks.*;
 
@@ -56,11 +58,11 @@ public class Channel {
             Packet packet = packetQueue.get(readTillIndex);
 
             int segment1 = (int) (position / Config.SEGMENT_LENGTH);
-            int segment2 = (int) (packet.position / Config.SEGMENT_LENGTH);
+            int segment2 = (int) (packet.getPosition() / Config.SEGMENT_LENGTH);
             int diff = 0;
-            if (packet.type == Config.PACKET_TYPE.RLEAVE) diff = 1;
+            if (packet.getType() == Config.PACKET_TYPE.RLEAVE) diff = 1;
 
-            if (packet.senderId != receiverId && Math.abs(segment1 - segment2) <= diff) {
+            if (packet.getSenderId() != receiverId && Math.abs(segment1 - segment2) <= diff) {
                 receiveQueue.add(packet);
                 packet.recordReception(currentTime);
             }

@@ -1,14 +1,16 @@
+package infrastructure;
+
 import java.util.*;
 
 public class Cloud {
     int appId;
     int currentLeaderId;
     boolean formedByRSU;
-    Simulator simulatorRef;
+    Statistics statsStore;
     int requestIdCounter;
     int initialRequestTime;
     int resourceQuotaMetTime;
-    Map<Integer, Map<Integer,Integer>> globalWorkStore;
+    public Map<Integer, Map<Integer,Integer>> globalWorkStore;
     
     private class Request {
         int id;
@@ -66,10 +68,10 @@ public class Cloud {
         }
     }
 
-    public Cloud(Simulator simulatorRef, int appId, int parentId, boolean formedByRSU, int initialRequestTime) {
+    public Cloud(Statistics statsStore, int appId, int parentId, boolean formedByRSU, int initialRequestTime) {
         this.appId = appId;
         this.currentLeaderId = parentId;
-        this.simulatorRef = simulatorRef;
+        this.statsStore = statsStore;
         this.formedByRSU = formedByRSU;
         this.requestIdCounter = 0;
         this.initialRequestTime = initialRequestTime; 
@@ -151,17 +153,14 @@ public class Cloud {
         return workAssignment;
     } 
 
-    public void addNewRequest(Packet reqPacket) {
-        assert(reqPacket.appId == appId);
-        int requestorId = reqPacket.senderId;
-        int resourcesNeeded = reqPacket.reqResources;
-        int requestId = requestIdCounter;
-        requestIdCounter++;
+    public void addNewRequest(int requestorId, int appId, int offeredResources, float velocity) {
+        assert(this.appId == appId);
+        int requestId = requestIdCounter++;
         // Add to pending request queue
-        pendingRequests.add(new Request(requestId, resourcesNeeded));
-        simulatorRef.changeTotalRequestsQueued(true);
+        pendingRequests.add(new Request(requestId, Config.APPLICATION_REQUIREMENT[appId]));
+        statsStore.changeTotalRequestsQueued(true);
         // Also add as an member
-        addMember(requestorId, reqPacket.offeredResources, reqPacket.velocity);
+        addMember(requestorId, offeredResources, velocity);
         return;
     }
 
@@ -211,7 +210,7 @@ public class Cloud {
         if (globalWorkStore.get(reqId).isEmpty()) {
             // System.out.printf("Request %d serviced\n", reqId);
             globalWorkStore.remove(reqId);
-            this.simulatorRef.incrTotalRequestsServiced();
+            this.statsStore.incrTotalRequestsServiced();
         }
         return;
     }
@@ -295,7 +294,7 @@ public class Cloud {
                 break;
             }
             else {
-                simulatorRef.changeTotalRequestsQueued(false);
+                statsStore.changeTotalRequestsQueued(false);
                 Map<Integer,Integer> workAssignment = allocateResource(currentRequest.resourcesNeeded);
                 assert(!globalWorkStore.containsKey(currentRequest.id));
                 globalWorkStore.put(currentRequest.id, workAssignment);
@@ -347,7 +346,7 @@ public class Cloud {
 
     public void recordCloudFormed(int formedTime) {
         this.resourceQuotaMetTime = formedTime;
-        this.simulatorRef.recordCloudFormed(formedTime - this.initialRequestTime, formedByRSU);
+        this.statsStore.recordCloudFormed(formedTime - this.initialRequestTime, formedByRSU);
         return;
     }
 

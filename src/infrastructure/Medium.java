@@ -1,3 +1,5 @@
+package infrastructure;
+
 public class Medium {        
     Channel channels[];
 
