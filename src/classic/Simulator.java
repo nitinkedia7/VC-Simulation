@@ -104,7 +104,7 @@ public class Simulator {
             fw.flush();
 
             int avgVehicleSpeedKMPH = 60;
-            for (int vehiclesPerSegment = 24; vehiclesPerSegment <= 24; vehiclesPerSegment += 4) {
+            for (int vehiclesPerSegment = 8; vehiclesPerSegment <= 36; vehiclesPerSegment += 4) {
                 String logFilePath = String.format("%s/%d_%d.log", logDirectoryPath, vehiclesPerSegment, avgVehicleSpeedKMPH);
                 PrintStream logFile = new PrintStream(new File(logFilePath));
                 System.setOut(logFile);

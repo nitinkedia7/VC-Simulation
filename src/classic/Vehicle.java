@@ -264,12 +264,38 @@ public class Vehicle implements Callable<Integer> {
         Channel targetChannel = mediumRef.getChannel(channelId);
 
         // Attempt to transmit if any packet is queued
+        // if (!transmitQueue.isEmpty()) {
+        //     if (targetChannel.isFree(id, position)) {
+        //         Packet packet = transmitQueue.poll();
+        //         targetChannel.transmitPacket(packet, currentTime, position);    
+        //     }
+        // } 
         if (!transmitQueue.isEmpty()) {
-            if (targetChannel.isFree(id, position)) {
-                Packet packet = transmitQueue.poll();
-                targetChannel.transmitPacket(packet, currentTime, position);    
+            if (backoffTime == 0) {
+                if (targetChannel.isFree(id, position)) {
+                    Packet packet = transmitQueue.poll();
+                    targetChannel.transmitPacket(packet, currentTime, position);    
+                    // Reset contention window
+                    contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
+                }
+                else {
+                    contentionWindowSize *= 2;
+                    if (contentionWindowSize > Config.CONTENTION_WINDOW_MAX) {
+                        System.out.println("Vehicle " + id + " could not transmit in backoff, retrying again");
+                        backoffTime = 0;
+                        contentionWindowSize = Config.CONTENTION_WINDOW_BASE;
+                    }
+                    else {
+                        backoffTime = ThreadLocalRandom.current().nextInt(contentionWindowSize) + 1;
+                    }
+                }
             }
-        } 
+            else {
+                if (targetChannel.senseFree(id, position)) {
+                    backoffTime--;
+                }
+            }
+        }  
 
         // Put processed work done (if any) to transmitQueue
         while (!processQueue.isEmpty()) {

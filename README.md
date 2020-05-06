@@ -1,6 +1,6 @@
 # How to Compile
 1. Navigate to src/ folder by `cd src`
-2. Delete class files using `find . -name "*.class" -type f - delete`
+2. Delete class files using `find . -name "*.class" -type f -delete`
 3. Compile by `javac advanced/Simulation.java` or `javac classic/Simulation.java`
 
 # How to Run

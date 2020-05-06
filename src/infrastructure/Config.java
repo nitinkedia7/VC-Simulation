@@ -20,7 +20,7 @@ public class Config {
     // as given by segment length (600 m) / max speed (25 m/s).
     // Thus requirement should be in seconds.
    public static int[] APPLICATION_REQUIREMENT = {500, 1000, 1500, 2000, 2500}; 
-   public static int WORK_CHUNK_SIZE = 100;
+   public static int WORK_CHUNK_SIZE = 120;
    public static int PROCESSING_SPEED = 1;
     
    public static int INV_RREQ_PROB = 2000;

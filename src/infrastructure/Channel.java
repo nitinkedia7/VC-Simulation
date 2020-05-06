@@ -44,6 +44,20 @@ public class Channel {
         return true;
     }
 
+    public boolean senseFree(int id, float position) {
+        transmitterPositionsLock.lock();
+        for (Transmitter t : transmitterPositions) {
+            int segment1 = (int) (position / Config.SEGMENT_LENGTH);
+            int segment2 = (int) (t.position / Config.SEGMENT_LENGTH);
+            if (Math.abs(segment1 - segment2) <= 1) {
+                transmitterPositionsLock.unlock();
+                return false;        
+            }
+        }
+        transmitterPositionsLock.unlock();
+        return true;
+    }
+
     public void transmitPacket(Packet packet, int currentTime, float currentPosition) {
         packetQueueLock.writeLock().lock();
         packetQueue.add(packet);

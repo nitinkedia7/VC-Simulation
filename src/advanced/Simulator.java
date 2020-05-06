@@ -78,7 +78,7 @@ public class Simulator {
     public void run() { // Optimised run implementation
         Map<Integer, List<Entity>> segmentMap = new HashMap<Integer, List<Entity>>();
         List<Callable<Integer>> tasks = new ArrayList<Callable<Integer>>();
-        ExecutorService taskExecutor = Executors.newFixedThreadPool(vehiclesPerSegment * 2);
+        ExecutorService taskExecutor = Executors.newFixedThreadPool(vehiclesPerSegment * 3);
         
         System.out.println("Simulation Started");
         while (currentTime <= stopTime) {
@@ -118,7 +118,7 @@ public class Simulator {
                     }
                 }
                 try {
-                    assert(tasks.size() <= 2 * vehiclesPerSegment);
+                    assert(tasks.size() <= 3 * vehiclesPerSegment);
                     List<Future<Integer>> results =  taskExecutor.invokeAll(tasks);
                     for (Future<Integer> result : results) {
                         result.get();
@@ -168,7 +168,7 @@ public class Simulator {
             fw.flush();
 
             int avgVehicleSpeedKMPH = 60;
-            for (int vehiclesPerSegment = 24; vehiclesPerSegment <= 24; vehiclesPerSegment += 4) {
+            for (int vehiclesPerSegment = 8; vehiclesPerSegment <= 36; vehiclesPerSegment += 4) {
                 String logFilePath = String.format("%s/%d_%d.log", logDirectoryPath, vehiclesPerSegment, avgVehicleSpeedKMPH);
                 PrintStream logFile = new PrintStream(new File(logFilePath));
                 System.setOut(logFile);
