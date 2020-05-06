@@ -180,14 +180,14 @@ public class Vehicle implements Callable<Integer> {
         Cloud cloud = clouds.get(donePacket.getRequestorId());
         if (cloud == null || !cloud.isCloudLeader(id)) return;
 
-        cloud.markAsDone(donePacket.getRequestId(), donePacket.getSenderId(), donePacket.getWorkDoneAmount());
+        cloud.markAsDone(donePacket.getRequestId(), donePacket.getSenderId(), donePacket.getWorkDoneAmount(), currentTime);
         Map<Integer, Map<Integer,Integer>> newWorkStore = cloud.processPendingRequests();
         if (!newWorkStore.isEmpty()) {
             Packet pstartPacket = new PacketCustom(statsStore, Config.PACKET_TYPE.PSTART, id, currentTime, id, newWorkStore);
             transmitQueue.add(pstartPacket);
             handlePSTART(pstartPacket);
         }
-        else if (cloud.globalWorkStore.isEmpty()) {
+        else if (cloud.allRequestsServiced()) {
             Packet tearPacket = new PacketCustom(statsStore, Config.PACKET_TYPE.RTEAR, id, currentTime, id);
             transmitQueue.add(tearPacket);
             clouds.remove(id);
@@ -199,7 +199,7 @@ public class Vehicle implements Callable<Integer> {
 
         Cloud cloud = clouds.get(packet.getRequestorId());
         if (cloud == null) return;
-        if (cloud.isCloudLeader(packet.getRequestorId())) {
+        if (cloud.isCloudLeader(packet.getSenderId())) {
             clouds.remove(packet.getRequestorId());
         }
         else if (cloud.isCloudLeader(id)) {
@@ -236,7 +236,7 @@ public class Vehicle implements Callable<Integer> {
                 getRandomChunkSize()
             );
             clouds.put(id, new Cloud(statsStore, pendingAppId, id, false, pendingRequestGenTime));
-            clouds.get(id).addNewRequest(id, pendingAppId, reqPacket.getOfferedResources(), 0);
+            clouds.get(id).addNewRequest(id, pendingAppId, reqPacket.getOfferedResources(), 0, reqPacket.getGenTime());
             transmitQueue.add(reqPacket);
         }
         else {
@@ -248,7 +248,7 @@ public class Vehicle implements Callable<Integer> {
                 id,
                 getRandomChunkSize()
             );
-            cloud.addNewRequest(id, pendingAppId, getRandomChunkSize(), 0);
+            cloud.addNewRequest(id, pendingAppId, getRandomChunkSize(), 0, reqPacket.getGenTime());
             Map<Integer, Map<Integer,Integer>> newWorkStore = cloud.processPendingRequests();
             if (!newWorkStore.isEmpty()) {
                 Packet pstartPacket = new PacketCustom(statsStore, Config.PACKET_TYPE.PSTART, id, currentTime, id, newWorkStore);

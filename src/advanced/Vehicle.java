@@ -95,6 +95,7 @@ public class Vehicle implements Callable<Integer> {
                     transmitQueue.add(
                         new PacketCustom(statsStore, Config.PACKET_TYPE.RLEAVE, id, currentTime, appId)
                     );
+                    statsStore.incrMemberLeaveCount();
                 }
                 if (cloud != null && cloud.isCloudLeader(id)) {
                     statsStore.incrLeaderLeaveCount();
@@ -129,7 +130,8 @@ public class Vehicle implements Callable<Integer> {
                 reqPacket.getSenderId(),
                 reqPacket.getAppId(),
                 reqPacket.getOfferedResources(),
-                reqPacket.getVelocity()
+                reqPacket.getVelocity(),
+                reqPacket.getGenTime()
             );
         }
 
@@ -149,7 +151,8 @@ public class Vehicle implements Callable<Integer> {
                 reqPacket.getSenderId(),
                 reqPacket.getAppId(),
                 reqPacket.getOfferedResources(),
-                reqPacket.getVelocity()
+                reqPacket.getVelocity(),
+                reqPacket.getGenTime()
             );
             Map<Integer, Map<Integer,Integer>> newWorkStore = cloud.processPendingRequests();
             if (!newWorkStore.isEmpty()) {
@@ -202,7 +205,7 @@ public class Vehicle implements Callable<Integer> {
     public void handlePDONE(Packet donePacket) {
         Cloud cloud = clouds.get(donePacket.getAppId());
         if (cloud == null || !cloud.isCloudLeader(id)) return;
-        cloud.markAsDone(donePacket.getRequestId(), donePacket.getSenderId(), donePacket.getWorkDoneAmount());
+        cloud.markAsDone(donePacket.getRequestId(), donePacket.getSenderId(), donePacket.getWorkDoneAmount(), currentTime);
         
         Map<Integer, Map<Integer,Integer>> newWorkStore = cloud.processPendingRequests();
         if (!newWorkStore.isEmpty()) {
@@ -210,7 +213,7 @@ public class Vehicle implements Callable<Integer> {
             transmitQueue.add(pstartPacket);
             handlePSTART(pstartPacket);
         }
-        else if (cloud.globalWorkStore.isEmpty()) {
+        else if (cloud.allRequestsServiced()) {
             Packet tearPacket = new PacketCustom(statsStore, Config.PACKET_TYPE.RTEAR, id, currentTime, donePacket.getAppId());
             transmitQueue.add(tearPacket);
             clouds.remove(donePacket.getAppId());
@@ -267,7 +270,8 @@ public class Vehicle implements Callable<Integer> {
                 reqPacket.getSenderId(),
                 reqPacket.getAppId(),
                 reqPacket.getOfferedResources(),
-                reqPacket.getVelocity() 
+                reqPacket.getVelocity(),
+                reqPacket.getGenTime()
             );
             transmitQueue.add(reqPacket);
         }

@@ -82,7 +82,7 @@ public class Simulator {
         
         System.out.println("Simulation Started");
         while (currentTime <= stopTime) {
-            if (currentTime % 50 == 0) {
+            if (currentTime % 1000 == 0) {
                 System.out.println("Interval " + currentTime);
                 // statsStore.printStatistics(vehiclesPerSegment, averageVehicleSpeed, csvFileWriter);
             }
@@ -148,7 +148,23 @@ public class Simulator {
 
             // PrintStream console = System.out;
             FileWriter fw = new FileWriter(logDirectoryPath + "/plot.csv", true);
-            fw.write("Average Vehicle Density\tAverage Vehicle Speed (km/h)\tRequests Generated\tRequests Serviced\tRequests Queued\tAverage Cluster Overhead (Ratio)\tClouds formed by RSU\tAverage Cloud Formation Time by RSU (ms)\tClouds formed Distributedly\tAverage Cloud Formation Time Distributedly (ms)\tLeader Change Count\n");
+            String csvHeader = String.format(
+                "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+                "Average Vehicle Density",
+                "Average Vehicle Speed (km/h)",
+                "Requests Generated",
+                "Requests Serviced",
+                "Requests Queued",
+                "Average Cluster Overhead",
+                "Clouds formed by RSU",
+                "Average Cloud Formation Time by RSU (ms)",
+                "Clouds formed Distributedly",
+                "Average Cloud Formation Time Distributedly (ms)",
+                "Leader Change Count",
+                "Member Leave Count",
+                "Average Request Service Time"
+            );
+            fw.write(csvHeader);
             fw.flush();
 
             int avgVehicleSpeedKMPH = 60;

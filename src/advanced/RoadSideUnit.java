@@ -43,7 +43,8 @@ public class RoadSideUnit implements Callable<Integer> {
                 reqPacket.getSenderId(),
                 reqPacket.getAppId(),
                 reqPacket.getOfferedResources(),
-                reqPacket.getVelocity()
+                reqPacket.getVelocity(),
+                reqPacket.getGenTime()
             );
         }
         else if (cloud.isCloudLeader(id)) {
@@ -51,7 +52,8 @@ public class RoadSideUnit implements Callable<Integer> {
                 reqPacket.getSenderId(),
                 reqPacket.getAppId(),
                 reqPacket.getOfferedResources(),
-                reqPacket.getVelocity()  
+                reqPacket.getVelocity(),
+                reqPacket.getGenTime()  
             );
         }
     }
@@ -64,7 +66,8 @@ public class RoadSideUnit implements Callable<Integer> {
                 p.getSenderId(),
                 p.getAppId(),
                 p.getOfferedResources(),
-                p.getVelocity()
+                p.getVelocity(),
+                p.getGenTime()
             );
         }
     }

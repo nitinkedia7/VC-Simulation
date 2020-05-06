@@ -10,10 +10,12 @@ public class Statistics {
     AtomicInteger totalCloudsFormationTimeSelf;
     AtomicInteger totalCloudsFormedRSU;
     AtomicInteger totalCloudsFormationTimeRSU;
+    AtomicInteger totalRequestServiceTime;
     AtomicInteger totalRequestsServiced;
     AtomicInteger totalRequestsQueued;
     AtomicInteger leaderChangeCount;
     AtomicInteger leaderLeaveCount;
+    AtomicInteger memberLeaveCount;
     AtomicInteger rrepReceivecCount;
     
     DecimalFormat decimalFormat;
@@ -61,11 +63,13 @@ public class Statistics {
         totalCloudsFormationTimeSelf = new AtomicInteger();
         totalCloudsFormedRSU = new AtomicInteger();
         totalCloudsFormationTimeRSU = new AtomicInteger();
+        totalRequestServiceTime = new AtomicInteger();
         totalRequestsServiced = new AtomicInteger();
         totalRequestsQueued = new AtomicInteger();
         
         leaderChangeCount = new AtomicInteger();
         leaderLeaveCount = new AtomicInteger();
+        memberLeaveCount = new AtomicInteger();
         rrepReceivecCount = new AtomicInteger();        
     }
 
@@ -105,7 +109,8 @@ public class Statistics {
         }
     }
 
-    public void incrTotalRequestsServiced() {
+    public void recordRequestServiced(int responseTime) {
+        totalRequestServiceTime.addAndGet(responseTime);
         totalRequestsServiced.incrementAndGet();
     }
 
@@ -114,7 +119,12 @@ public class Statistics {
     }
 
     public void incrLeaderLeaveCount() {
+        memberLeaveCount.incrementAndGet();
         leaderLeaveCount.incrementAndGet();
+    }
+
+    public void incrMemberLeaveCount() {
+        memberLeaveCount.incrementAndGet();
     }
 
     public void incrRrepReceiveCount() {
@@ -164,7 +174,7 @@ public class Statistics {
         System.out.println("RREP received by leader/RSU = " + rrepReceivecCount);
 
         String csvRow = String.format(
-            "%d\t%d\t%d\t%d\t%d\t%s\t%d\t%s\t%d\t%s\t%d\n",
+            "%d\t%d\t%d\t%d\t%d\t%s\t%d\t%s\t%d\t%s\t%d\t%d\t%s\n",
             vehiclesPerSegment,
             averageVehicleSpeed,
             packetStats.get(Config.PACKET_TYPE.RREQ).generatedCount.intValue() + packetStats.get(Config.PACKET_TYPE.RJOIN).generatedCount.intValue(),
@@ -175,7 +185,9 @@ public class Statistics {
             decimalFormat.format(averageCloudFormationTimeRSU),
             totalCloudsFormedSelf.intValue(),
             decimalFormat.format(averageCloudFormationTimeSelf),
-            leaderChangeCount.intValue()
+            leaderChangeCount.intValue(),
+            memberLeaveCount.intValue(),
+            decimalFormat.format(totalRequestServiceTime.doubleValue() / totalRequestsServiced.intValue())
         );
         try {
             csvFileWriter.write(csvRow);

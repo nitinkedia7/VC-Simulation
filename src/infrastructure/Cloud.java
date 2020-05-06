@@ -10,7 +10,7 @@ public class Cloud {
     int requestIdCounter;
     int initialRequestTime;
     int resourceQuotaMetTime;
-    public Map<Integer, Map<Integer,Integer>> globalWorkStore;
+    Map<Integer, Map<Integer,Integer>> globalWorkStore;
     
     private class Request {
         int id;
@@ -22,6 +22,7 @@ public class Cloud {
         }
     }   
     Queue<Request> pendingRequests;
+    List<Integer> requestGenerationTime;
     
     private class Pair {
         int first;
@@ -78,6 +79,7 @@ public class Cloud {
         this.resourceQuotaMetTime = Integer.MAX_VALUE;
         this.globalWorkStore = new HashMap<Integer, Map<Integer,Integer>>();
         this.pendingRequests = new LinkedList<>();
+        this.requestGenerationTime = new ArrayList<>();
         this.freeResourcesSet = new TreeSet<Pair>(new Comparator<Pair>() {
             @Override
             public int compare(Pair x, Pair y) {
@@ -153,8 +155,10 @@ public class Cloud {
         return workAssignment;
     } 
 
-    public void addNewRequest(int requestorId, int appId, int offeredResources, float velocity) {
-        int requestId = requestIdCounter++;
+    public void addNewRequest(int requestorId, int appId, int offeredResources, float velocity, int generationTime) {
+        int requestId = requestIdCounter;
+        requestGenerationTime.add(generationTime);
+        requestIdCounter++;
         // Add to pending request queue
         pendingRequests.add(new Request(requestId, Config.APPLICATION_REQUIREMENT[appId]));
         statsStore.changeTotalRequestsQueued(true);
@@ -177,7 +181,7 @@ public class Cloud {
         return;
     }
 
-    public void markAsDone(int reqId, int workerId, int workDoneAmount) {
+    public void markAsDone(int reqId, int workerId, int workDoneAmount, int currentTime) {
         // System.out.println("Worker " + workerId + " submits " + workDoneAmount + " work for request id " + reqId);
         if (!globalWorkStore.containsKey(reqId)) {
             // System.out.println("Worker " + workerId + " illegal reqId " + workDoneAmount + " work for request id " + reqId);
@@ -209,7 +213,7 @@ public class Cloud {
         if (globalWorkStore.get(reqId).isEmpty()) {
             // System.out.printf("Request %d serviced\n", reqId);
             globalWorkStore.remove(reqId);
-            this.statsStore.incrTotalRequestsServiced();
+            this.statsStore.recordRequestServiced(currentTime - requestGenerationTime.get(reqId));
         }
         return;
     }
@@ -341,6 +345,10 @@ public class Cloud {
     public boolean justMetResourceQuota() {
         return (resourceQuotaMetTime == Integer.MAX_VALUE &&
             totalFreeResource >= Config.APPLICATION_REQUIREMENT[appId]);
+    }
+
+    public boolean allRequestsServiced() {
+        return (globalWorkStore.isEmpty() && pendingRequests.isEmpty());
     }
 
     public void recordCloudFormed(int formedTime) {
