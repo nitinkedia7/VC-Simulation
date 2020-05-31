@@ -1,4 +1,9 @@
+# Simulation parameters
+Parameters can be found in `infrastructure/Config.java`.
+Also choose vehicle density and average spedd of the simulation in `Simulator.java:main()`.
+
 # How to Compile
+0. Check simulation parameters first
 1. Navigate to src/ folder by `cd src`
 2. Delete class files using `find . -name "*.class" -type f -delete`
 3. Compile by `javac advanced/Simulation.java` or `javac classic/Simulation.java`
