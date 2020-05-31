@@ -1,3 +1,8 @@
+/**
+ * Medium.java: Wrapper for potentially multiple channel.
+ * We are only concerned with control channel in our algorithm.
+ */
+
 package infrastructure;
 
 public class Medium {        

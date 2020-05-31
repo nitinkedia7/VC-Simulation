@@ -1,3 +1,9 @@
+/*
+    Cloud.java: Provides an API for the internal processing of cloud.
+    For a cloud instance, ensure that only one vehicle/RSU is controlling it.
+    This is usually the leader.
+*/
+
 package infrastructure;
 
 import java.util.*;
@@ -10,8 +16,10 @@ public class Cloud {
     int requestIdCounter;
     int initialRequestTime;
     int resourceQuotaMetTime;
+    // globalWorkStore tracks all ongoing requests
     Map<Integer, Map<Integer,Integer>> globalWorkStore;
     
+    // Class for storing a request
     private class Request {
         int id;
         int resourcesNeeded;
@@ -24,6 +32,7 @@ public class Cloud {
     Queue<Request> pendingRequests;
     List<Integer> requestGenerationTime;
     
+    // Pair class because Java doesn't have one
     private class Pair {
         int first;
         int second;
@@ -45,10 +54,11 @@ public class Cloud {
             }
         }
     }
-    TreeSet<Pair> freeResourcesSet;
-    Map<Integer,Integer> freeResourcesMap; // Acts as member list
-    int totalFreeResource;
+    TreeSet<Pair> freeResourcesSet; // Contains (donation, member) pairs
+    Map<Integer,Integer> freeResourcesMap; // Map member to its donation, acts as member list
+    int totalFreeResource; // Amount of pooled resources currently free
 
+    // (Potential) leader class stores members sorted by their LQI
     class Leader {
         int id;
         float speed;
@@ -80,6 +90,7 @@ public class Cloud {
         this.globalWorkStore = new HashMap<Integer, Map<Integer,Integer>>();
         this.pendingRequests = new LinkedList<>();
         this.requestGenerationTime = new ArrayList<>();
+        // Memeber with highest amount of free resource is at set beginning
         this.freeResourcesSet = new TreeSet<Pair>(new Comparator<Pair>() {
             @Override
             public int compare(Pair x, Pair y) {
@@ -112,6 +123,7 @@ public class Cloud {
         return freeResourcesMap.containsKey(id);
     }
 
+    // Add member to cloud (in resource pool and leader list)
     public void addMember(int id, int resourceLimit, float velocity) {
         assert(resourceLimit > 0);
         if (freeResourcesMap.containsKey(id)) {
@@ -127,6 +139,11 @@ public class Cloud {
         }
     }
 
+    /*
+        This function is used to split the resources required for a request
+        among members. Implements a greedy approach of starting from the
+        member with highest free resources first to reduce number of splits
+    */
     private Map<Integer,Integer> allocateResource(int resourcesNeeded) {
         assert(resourcesNeeded >= 0);
         assert(resourcesNeeded <= totalFreeResource);
@@ -155,6 +172,7 @@ public class Cloud {
         return workAssignment;
     } 
 
+    // This function is used to enqueue a new request
     public void addNewRequest(int requestorId, int appId, int offeredResources, float velocity, int generationTime) {
         int requestId = requestIdCounter;
         requestGenerationTime.add(generationTime);
@@ -167,6 +185,8 @@ public class Cloud {
         return;
     }
 
+    // When a working member reverts with a PDONE, the resource
+    // is put back in the resource pool
     private void replenishResource(int id, int replenishAmount) {
         assert(isMember(id));
         int freeResource = freeResourcesMap.get(id);
@@ -181,6 +201,13 @@ public class Cloud {
         return;
     }
 
+    /*
+        This function is used to track that one working member has finished its subtask.
+        Has several checks in place, request id should be valid and the member should have
+        been alloted a subtask in the firist place.
+        Also if a worker was alloted more than one subtask (in reassignment), then reduce
+        the remaining work as necessary.
+    */
     public void markAsDone(int reqId, int workerId, int workDoneAmount, int currentTime) {
         // System.out.println("Worker " + workerId + " submits " + workDoneAmount + " work for request id " + reqId);
         if (!globalWorkStore.containsKey(reqId)) {
@@ -234,6 +261,9 @@ public class Cloud {
         System.out.println(message);
     }
 
+    // This function is to delete a leaving member from the cloud
+    // Also finds if a leaving member had some alloted task.
+    // If so, this work is reallocated and the allocation communicated back to leader
     public Map<Integer, Map<Integer,Integer>> reassignWork(int id) {
         Map<Integer, Map<Integer,Integer>> complementWorkStore = new HashMap<Integer, Map<Integer,Integer>>();
         if (!isMember(id)) {
@@ -260,7 +290,6 @@ public class Cloud {
                 break;
             }
         }
-        
         // Iterate through globalWorkStore and find where this member is currently working
         globalWorkStore.forEach((reqId, workAssignment) -> {
             if (workAssignment.containsKey(id)) {
@@ -285,10 +314,14 @@ public class Cloud {
                 }
             }
         });
-
         return complementWorkStore;
     }
 
+    /*
+        This function is used to process pending pending order in FIFO manner.
+        Schedules as many requests from head of queue as possible in the resource pool.
+        Returns a map of request_id -> member_id -> work_allocated
+    */
     public Map<Integer, Map<Integer,Integer>> processPendingRequests() {
         Map<Integer, Map<Integer,Integer>> complementGlobalWorkStore = new HashMap<Integer, Map<Integer,Integer>>();
         while (!pendingRequests.isEmpty()) {
@@ -312,10 +345,14 @@ public class Cloud {
         return complementGlobalWorkStore;
     }
 
+    /*
+        Following functions are used for assigning cloud leader.
+    */
     public boolean isCloudLeader(int id) {
         return currentLeaderId == id;
     }
 
+    // Check if the given vehicle id is the next leader
     public boolean isNextLeader(int id) {
         if (futureLeaders.size() < 2) {
             System.out.println("No future leader");
@@ -331,6 +368,8 @@ public class Cloud {
         this.currentLeaderId = nextLeader.id;
     }
 
+    // This function is used calculate members by LQI and sort them
+    // Here, LQI = sum |speed difference| hence lower is better
     public void electLeader() {
         for (Leader potentiaLeader1 : futureLeaders) {
             for (Leader potentialLeader2 : futureLeaders) {

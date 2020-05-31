@@ -1,3 +1,13 @@
+/**
+ * RoadSideUnit.java: Implements static RSU's which follow
+ * our vehicular cloud life-cycle algorithm. Analogous to
+ * Vehicle class implementation.
+ * The main task of RSU is to form a cloud. For this
+ * when it gets a RREQ, it initialises a cloud and waits till sufficient members
+ * have been recruited. During this time RSU is effectively the cloud leader
+ * and hence most of the functions handlePacket() class can be reused.
+ * (Both RSU's and vehicles have the logic of building clouds in them)
+ */
 package advanced;
 
 import java.util.*;
@@ -5,19 +15,21 @@ import java.util.concurrent.*;
 import infrastructure.*;
 
 public class RoadSideUnit implements Callable<Integer> {
-    int id;
-    float position;
+    int id; // Negative integers -1, -2, ...
+    float position; // static
     int currentTime;
+    // Communication parameters
     int channelId;
     Queue<Packet> transmitQueue;
     Queue<Packet> receiveQueue;
     int readTillIndex;
-    Map<Integer, Cloud> clouds;
+    Map<Integer, Cloud> clouds; // clouds in the segment indexed by app id
     Statistics statsStore;
     Medium mediumRef;
     int backoffTime;
     int contentionWindowSize;
 
+    // Constructor allocate space for the data structures
     public RoadSideUnit(int id, float position, Statistics statsStore, Medium mediumRef) {
         this.id = id;
         this.position = position;
@@ -117,12 +129,6 @@ public class RoadSideUnit implements Callable<Integer> {
         // System.out.println("RSU     " + id + " starting interval " + currentTime);
         Channel targetChannel = mediumRef.getChannel(channelId);
         
-        // if (!transmitQueue.isEmpty()) {
-        //     if (targetChannel.isFree(id, position)) {
-        //         Packet packet = transmitQueue.poll();
-        //         targetChannel.transmitPacket(packet, currentTime, position);
-        //     }
-        // }
         // Attempt to transmit packets in transmitQueue only if there are any pending packets
         if (!transmitQueue.isEmpty()) {
             if (backoffTime == 0) {

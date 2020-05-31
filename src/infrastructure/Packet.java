@@ -1,3 +1,10 @@
+/**
+ * Packet.java: Interface for packet class.
+ * Different algorithms will have their own parameter requirements
+ * in the packet class. To be compatible with the channel implementation
+ * each should implement this interface. 
+ */
+
 package infrastructure;
 
 import java.util.*;

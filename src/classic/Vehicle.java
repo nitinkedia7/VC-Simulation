@@ -1,3 +1,12 @@
+/*
+    classical/Vehicle.java: Clone of advanced/Vehicle.java
+    with modifications for the classical algorithm:
+    1. Vehicles always spawn their clouds for themselves
+    2. In proposed algorithm, the key which identifies a clous is
+    app_id (each category has its id) but such a concept is not present
+    here. The key is vehicle_id since every vehicle makes its own cloud. 
+*/
+
 package classic;
 
 import java.util.*;
@@ -264,12 +273,6 @@ public class Vehicle implements Callable<Integer> {
         Channel targetChannel = mediumRef.getChannel(channelId);
 
         // Attempt to transmit if any packet is queued
-        // if (!transmitQueue.isEmpty()) {
-        //     if (targetChannel.isFree(id, position)) {
-        //         Packet packet = transmitQueue.poll();
-        //         targetChannel.transmitPacket(packet, currentTime, position);    
-        //     }
-        // } 
         if (!transmitQueue.isEmpty()) {
             if (backoffTime == 0) {
                 if (targetChannel.isFree(id, position)) {

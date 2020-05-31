@@ -1,3 +1,8 @@
+/**
+ * classical/Simulator.java: Clone of the advanced alrorithm
+ * simulator. RSU's are not required in the classical algorithm.
+ */
+
 package classic;
 
 import java.io.*;
@@ -114,16 +119,16 @@ public class Simulator {
                 simulator.printStatistics();
             }
 
-            // int averageVehiclePerSegment = 24;
-            // for (int vehicleSpeedKMPH = 30; vehicleSpeedKMPH <= 90; vehicleSpeedKMPH += 10) {
-            //     String logFilePath = String.format("%s/%d_%d.log", logDirectoryPath, averageVehiclePerSegment, vehicleSpeedKMPH);
-            //     PrintStream logFile = new PrintStream(new File(logFilePath));
-            //     System.setOut(logFile);
+            int averageVehiclePerSegment = 24;
+            for (int vehicleSpeedKMPH = 30; vehicleSpeedKMPH <= 90; vehicleSpeedKMPH += 10) {
+                String logFilePath = String.format("%s/%d_%d.log", logDirectoryPath, averageVehiclePerSegment, vehicleSpeedKMPH);
+                PrintStream logFile = new PrintStream(new File(logFilePath));
+                System.setOut(logFile);
                 
-            //     Simulator simulator = new Simulator(averageVehiclePerSegment, vehicleSpeedKMPH, fw);
-            //     simulator.run();
-            //     simulator.printStatistics(); 
-            // }
+                Simulator simulator = new Simulator(averageVehiclePerSegment, vehicleSpeedKMPH, fw);
+                simulator.run();
+                simulator.printStatistics(); 
+            }
             fw.close();
         } catch (IOException ioe) {
             System.err.println("IOException: " + ioe.getMessage());

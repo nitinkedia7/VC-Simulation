@@ -1,3 +1,8 @@
+/**
+ * PacketCustom.java: Implementation of the Packet interface
+ * with members variables as required by the algorithm.
+ */
+
 package advanced;
 
 import java.util.*;
@@ -8,8 +13,8 @@ public class PacketCustom implements Packet {
     int senderId;
     int genTime;   
     int appId;
-    float position;    
-    Statistics statsStore;
+    float position; // Used in transmission range    
+    Statistics statsStore;  // Used to record transmission/reception time
 
     float velocity;
     Cloud cloud;       
@@ -20,6 +25,11 @@ public class PacketCustom implements Packet {
     int requestorId;
     int requestId;
 
+    /*
+        Following are several constructors for different types of packets.
+        Eg. PSTART messages require a map to store the work assignment while
+        RREP messages need offered resources amount.
+    */
     public PacketCustom(Statistics statsStore, Config.PACKET_TYPE type, int senderId, int genTime, int appId) {
         this.type = type;
         this.senderId = senderId;   
@@ -68,6 +78,7 @@ public class PacketCustom implements Packet {
         this.rsuReplied = rsuReplied;
     }
 
+    // Getters for all the member variables
     public Config.PACKET_TYPE getType() {
         return type;
     }

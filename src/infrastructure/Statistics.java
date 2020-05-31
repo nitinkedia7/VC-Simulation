@@ -1,3 +1,11 @@
+/**
+ * Statistics.java: A global store for storing various statistics.
+ * Functions are thread-safe as they use atomic integers. Locks can also
+ * be used.
+ * Statstics class maintains a running value of the statistics which are usually
+ * printed at the end of the simulation.
+*/
+
 package infrastructure;
 
 import java.io.*;

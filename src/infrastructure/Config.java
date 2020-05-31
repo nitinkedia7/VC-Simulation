@@ -1,3 +1,8 @@
+/*
+   Config,java: Various parameters for simulation.
+   Is static to allow all other classes to read the values.
+*/
+
 package infrastructure;
 
 public class Config {

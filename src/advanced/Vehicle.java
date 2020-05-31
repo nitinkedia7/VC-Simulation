@@ -1,3 +1,9 @@
+/*
+    Vehicle.java: This files implements the Vehicle class.
+    Vehicles follow the advanced algorithm for vehicular clouds.
+    Leader functions are embedded in the same functions.
+*/
+
 package advanced;
 
 import java.util.*;
@@ -6,15 +12,19 @@ import infrastructure.*;
 
 public class Vehicle implements Callable<Integer> {
     int id;
+    // Movement parameters
     float position;
     float speed;
     float averageSpeed;
     int direction;
+    // Time when the position was last updated
     int lastUpdated;
     int currentTime;
     Statistics statsStore;
     Medium mediumRef;
+    // Known clouds in the current segment indexed by app_id
     Map<Integer, Cloud> clouds;
+    // Communication parameters
     int channelId;
     Queue<Packet> transmitQueue;
     Queue<Packet> receiveQueue;
@@ -22,6 +32,9 @@ public class Vehicle implements Callable<Integer> {
     int backoffTime;
     int contentionWindowSize;
     
+    // Processblock is a subtask alloted to this vehicle by the leader.
+    // On receiving a task say 100 Mb for 100 ms, the vehicle can do any other task
+    // after (bookedTillTime + 100ms). The vehicle can already be busy i.e. bookedTillTime > currentTime.
     class ProcessBlock {
         int appId;
         int reqId;
@@ -43,6 +56,7 @@ public class Vehicle implements Callable<Integer> {
     int bookedTillTime;
     Queue<ProcessBlock> processQueue;
 
+    // Pending request details for which vehicle might have to form cloud itself
     int pendingAppId;
     int pendingRequestGenTime;
     boolean hasPendingRequest;
@@ -77,8 +91,10 @@ public class Vehicle implements Callable<Integer> {
         return oldSegmentId != newSegmentId;
     }
 
+    // Updates the current position of the vehicle and sends RLEAVE if segment has changed
     public void updatePosition() {
         float newPosition = position + (direction * speed * (currentTime - lastUpdated)) / 1000;
+        // Vehicle rebound after hitting any of the road ends
         if (newPosition > Config.ROAD_END) {
             newPosition = Config.ROAD_END - 1;
             direction = -1;
@@ -107,6 +123,7 @@ public class Vehicle implements Callable<Integer> {
         }
         position = newPosition;
 
+        // Snippet to calculate new speed with normal distribution aroung avergage speed
         float newSpeed;
         do {
             newSpeed = (float) ThreadLocalRandom.current().nextGaussian();
@@ -122,8 +139,14 @@ public class Vehicle implements Callable<Integer> {
         return Config.WORK_CHUNK_SIZE * multiplier;
     }
 
+    /*
+        Following functions each handle a specific packet type.
+        In several places queue.add(packet); process(packet) can be seen.
+        Vehicles will not read packets they have sent it. Eg.- If the vehicle
+        itself is the leader it needs to hear the PDONE work it alloted to itself.
+    */
     public void handleRREQ(Packet reqPacket) {
-        // If this vehicle is the leader then it enqueues it
+        // If this vehicle is the leader then it enqueue received request
         Cloud cloud = clouds.get(reqPacket.getAppId());
         if (cloud != null && cloud.isCloudLeader(id)) {
             cloud.addNewRequest(
@@ -137,14 +160,22 @@ public class Vehicle implements Callable<Integer> {
 
         // Also send a RREP, if someone else's request
         if (reqPacket.getSenderId() != id) {
-            Packet rrepPacket = new PacketCustom(statsStore, Config.PACKET_TYPE.RREP, id, currentTime, direction * speed, reqPacket.getAppId(), getRandomChunkSize());
+            Packet rrepPacket = new PacketCustom(
+                statsStore,
+                Config.PACKET_TYPE.RREP,
+                id,
+                currentTime,
+                direction * speed,
+                reqPacket.getAppId(),
+                getRandomChunkSize()
+            );
             transmitQueue.add(rrepPacket);
             handleRREP(rrepPacket);
         }
     }
 
     public void handleRJOIN(Packet reqPacket) {
-        // If this vehicle is the leader then it enqueues it
+        // If this vehicle is the leader then it enqueues this request
         Cloud cloud = clouds.get(reqPacket.getAppId());
         if (cloud != null && cloud.isCloudLeader(id)) {
             cloud.addNewRequest(
@@ -154,6 +185,8 @@ public class Vehicle implements Callable<Integer> {
                 reqPacket.getVelocity(),
                 reqPacket.getGenTime()
             );
+            // Polling the cloud periodically if it can process the next requests is not done.
+            // Instead, every time a request comes or finishes we check if more requests can be processes.
             Map<Integer, Map<Integer,Integer>> newWorkStore = cloud.processPendingRequests();
             if (!newWorkStore.isEmpty()) {
                 Packet pstartPacket = new PacketCustom(statsStore, Config.PACKET_TYPE.PSTART, id, currentTime, reqPacket.getAppId(), newWorkStore);
@@ -167,6 +200,7 @@ public class Vehicle implements Callable<Integer> {
         Cloud cloud = clouds.get(donorPacket.getAppId());
         if (cloud == null || !cloud.isCloudLeader(id)) return;
         statsStore.incrRrepReceiveCount();
+        // Add the donor and if the cloud has accumlated enough members, announce the cloud.
         cloud.addMember(donorPacket.getSenderId(), donorPacket.getOfferedResources(), donorPacket.getVelocity());
         if (cloud.justMetResourceQuota()) {
             cloud.electLeader();
@@ -182,6 +216,8 @@ public class Vehicle implements Callable<Integer> {
         Cloud cloud = ackPacket.getCloud();
         clouds.put(ackPacket.getAppId(), cloud);
         if (cloud != null && cloud.isCloudLeader(id)) {
+            // This vehicle is the leader of a cloud formed
+            // It starts processing the requests by sending the first PSTART message
             cloud.recordCloudFormed(currentTime);
             // cloud.printStats();
             Map<Integer, Map<Integer,Integer>> workAssignment = cloud.processPendingRequests();
@@ -195,7 +231,7 @@ public class Vehicle implements Callable<Integer> {
         startPacket.getWorkAssignment().forEach((reqId, appWorkAssignment) -> {
             int assignedWork = appWorkAssignment.getOrDefault(id, 0);
             if (assignedWork > 0) {
-                // Add an alarm for contribution
+                // Add an alarm for when this alloted task will be finished
                 processQueue.add(new ProcessBlock(startPacket.getAppId(), reqId, assignedWork));
             }
         });
@@ -205,8 +241,9 @@ public class Vehicle implements Callable<Integer> {
     public void handlePDONE(Packet donePacket) {
         Cloud cloud = clouds.get(donePacket.getAppId());
         if (cloud == null || !cloud.isCloudLeader(id)) return;
+        // Register that the sender has done its allotted subtask
         cloud.markAsDone(donePacket.getRequestId(), donePacket.getSenderId(), donePacket.getWorkDoneAmount(), currentTime);
-        
+        // Since some resources have just replenished see if more requests can be processed
         Map<Integer, Map<Integer,Integer>> newWorkStore = cloud.processPendingRequests();
         if (!newWorkStore.isEmpty()) {
             Packet pstartPacket = new PacketCustom(statsStore, Config.PACKET_TYPE.PSTART, id, currentTime, donePacket.getAppId(), newWorkStore);
@@ -214,6 +251,7 @@ public class Vehicle implements Callable<Integer> {
             handlePSTART(pstartPacket);
         }
         else if (cloud.allRequestsServiced()) {
+            // Tear the cloud if no request is ongoing or pending
             Packet tearPacket = new PacketCustom(statsStore, Config.PACKET_TYPE.RTEAR, id, currentTime, donePacket.getAppId());
             transmitQueue.add(tearPacket);
             clouds.remove(donePacket.getAppId());
@@ -224,12 +262,12 @@ public class Vehicle implements Callable<Integer> {
         Cloud cloud = clouds.get(packet.getAppId());
         if (cloud == null) return;
 
-        // First, reassign leader if needed
+        // First, reassign leader if needed using second best LQI
         if (cloud.isCloudLeader(packet.getSenderId()) && cloud.isNextLeader(id)) {
             cloud.assignNextLeader();
             statsStore.incrLeaderChangeCount();
         }
-        // Then reassign the left work
+        // Then reassign the work supposed to be done by the member who left the cloud
         if (cloud.isCloudLeader(id)) {
             Map<Integer, Map<Integer,Integer>> workAssignment = cloud.reassignWork(packet.getSenderId());
             Packet pstartPacket = new PacketCustom(statsStore, Config.PACKET_TYPE.PSTART, id, currentTime, packet.getAppId(), workAssignment);
@@ -240,9 +278,10 @@ public class Vehicle implements Callable<Integer> {
 
     public void selfInitiateCloudFormation() {
         // System.out.println("Vehicle " + id + " self-initiating cloud formation for appId " + pendingAppId);
-        // Ensure that no cloud this appId exists till now
         Cloud cloud = clouds.get(pendingAppId);
         if (cloud != null) {
+            // Join existing cloud if one was formed while
+            // this vehicle was probing for RSU presence 
             Packet rjoinPacket = new PacketCustom (
                 statsStore,
                 Config.PACKET_TYPE.RJOIN,
@@ -256,6 +295,7 @@ public class Vehicle implements Callable<Integer> {
             handleRJOIN(rjoinPacket);
         }
         else {
+            // Send a RREQ to recruit members and start forming a cloud by own
             Packet reqPacket = new PacketCustom (
                 statsStore,
                 Config.PACKET_TYPE.RREQ,
@@ -280,7 +320,7 @@ public class Vehicle implements Callable<Integer> {
     public void handleRPROBE(Packet probe) {
         Cloud cloud = clouds.get(probe.getAppId());
         if (cloud != null && cloud.isCloudLeader(id)) {
-            // send RPRESENT
+            // This is the leader of the cloud requested for requested app_id, send RPRESENT
             Packet presentPacket = new PacketCustom (
                 statsStore,
                 Config.PACKET_TYPE.RPRESENT,
@@ -298,9 +338,11 @@ public class Vehicle implements Callable<Integer> {
     public void handleRPRESENT(Packet packet) {
         if (!hasPendingRequest) return;
         if (!(packet.getAppId() == pendingAppId && packet.getRequestorId() == id)) return;
-
+        
         hasPendingRequest = false;
         if (packet.didRsuReply()) {
+            // If RSU replied, send RREQ the cloud is not formed
+            // just the fact that RSU will make the cloud out of the RREP's
             Packet rreqPacket = new PacketCustom (
                 statsStore,
                 Config.PACKET_TYPE.RREQ,
@@ -314,6 +356,7 @@ public class Vehicle implements Callable<Integer> {
             handleRREQ(rreqPacket);
         }
         else {
+            // Cloud already formed, just send RJOIN to enqueue request
             Packet rjoinPacket = new PacketCustom (
                 statsStore,
                 Config.PACKET_TYPE.RJOIN,
@@ -338,16 +381,12 @@ public class Vehicle implements Callable<Integer> {
     }
 
     public Integer call() {
+        // One call of this function represents 1 ms
         // System.out.println("Vehicle " + id + " starting interval " + currentTime);
-        Channel targetChannel = mediumRef.getChannel(channelId);
 
-        // if (!transmitQueue.isEmpty()) {
-        //     if (targetChannel.isFree(id, position)) {
-        //         Packet packet = transmitQueue.poll();
-        //         targetChannel.transmitPacket(packet, currentTime, position);    
-        //     }
-        // }
-        // Attempt to transmit packets in transmitQueue only if there are any pending packets
+        Channel targetChannel = mediumRef.getChannel(channelId);
+        // Attempt to transmit a packet in transmitQueue only if there are any pending packets
+        // Follows CSMA-CA, see README.md for pseudocode
         if (!transmitQueue.isEmpty()) {
             if (backoffTime == 0) {
                 if (targetChannel.isFree(id, position)) {
@@ -375,7 +414,7 @@ public class Vehicle implements Callable<Integer> {
             }
         }  
 
-        // Put processed work done (if any) to transmitQueue
+        // Put processed work done which is just completed (if any) to transmitQueue
         while (!processQueue.isEmpty()) {
             ProcessBlock nextBlock = processQueue.peek();
             if (currentTime >= nextBlock.completionTime) {
@@ -403,6 +442,7 @@ public class Vehicle implements Callable<Integer> {
             int appId = ThreadLocalRandom.current().nextInt(Config.APPLICATION_TYPE_COUNT);
             if (hasRequest == 1) {
                 if (clouds.get(appId) != null) {
+                    // Cloud present, send RJOIN
                     Packet rjoinPacket = new PacketCustom (
                         statsStore,
                         Config.PACKET_TYPE.RJOIN,
@@ -471,6 +511,7 @@ public class Vehicle implements Callable<Integer> {
                     break;
             }
         }
+        // Position is updated every 50 ms;
         if (currentTime % 50 == 0) updatePosition();
         return (++currentTime);
     }

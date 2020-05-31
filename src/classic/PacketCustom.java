@@ -1,3 +1,8 @@
+/**
+ * PacketCustom.java: Implementation of the Packet interface
+ * with members variables as required by the classical algorithm.
+*/
+
 package classic;
 
 import java.util.*;

@@ -1,3 +1,8 @@
+/*
+    Simulator.java:
+    Constructs the system and runs it for specified simulation time.
+*/
+
 package advanced;
 
 import java.io.*;
@@ -8,13 +13,14 @@ import infrastructure.*;
 public class Simulator {
     int currentTime;
     int stopTime;
+    // Entities in the system
     int vehiclesPerSegment;
     int totalVehicleCount;
     int averageVehicleSpeed;
     ArrayList<Vehicle> vehicles;
     ArrayList<RoadSideUnit> roadSideUnits;
-    Medium medium;
-    Statistics statsStore;
+    Medium medium; // Wrapper for the different channels (only control channel in our case)
+    Statistics statsStore; // Class for accumulating statistics
     FileWriter csvFileWriter;
 
     public Simulator(int givenVehiclePerSegment, int givenAverageVehicleSpeed, FileWriter fw) {
@@ -53,6 +59,8 @@ public class Simulator {
         statsStore.printStatistics(vehiclesPerSegment, averageVehicleSpeed, csvFileWriter);
     }
 
+    // Entity represnts either a Vehicle or RSU and its position
+    // It is used to sort them by their position
     private class Entity {
         int id;
         int index;
@@ -75,6 +83,13 @@ public class Simulator {
         }
     }
 
+    /*
+        run(): Run the simulation.
+        The simulation proceeds in the granularity of a milisecond.
+        Inside an iteration (1 ms), instead of spawing all (600) vehicles/RSU's
+        in a single thread, it is done in segments. This is possible since segments are
+        the building block in the algorithm.
+    */
     public void run() { // Optimised run implementation
         Map<Integer, List<Entity>> segmentMap = new HashMap<Integer, List<Entity>>();
         List<Callable<Integer>> tasks = new ArrayList<Callable<Integer>>();
@@ -86,6 +101,9 @@ public class Simulator {
                 System.out.println("Interval " + currentTime);
                 // statsStore.printStatistics(vehiclesPerSegment, averageVehicleSpeed, csvFileWriter);
             }
+            // The distribution of vehicles across segment is recalculated
+            // every 50 ms. This is feasible, since with speed 60 kmph a vehicle travels about 1 m.
+            // This is very small wrt. the segment length
             if (currentTime == 0 || currentTime % 50 == 1) {
                 segmentMap.clear();
                 for (int i = 0; i < roadSideUnits.size(); i++) {
@@ -106,8 +124,11 @@ public class Simulator {
                 }
             }
             
+            // Process segment by segment
             for (List<Entity> elist : segmentMap.values()) {
                 tasks.clear();
+                // Shuffling is done for fairness amongst which vehicle
+                // gets to spawn first and potentially lock the channel for transmission
                 Collections.shuffle(elist);
                 for (Entity entity : elist) {
                     if (entity.id > 0) {
@@ -134,6 +155,7 @@ public class Simulator {
                     e.printStackTrace(System.err);
                 }
             }
+            // See infrastructure/Channel.java
             medium.getChannel(0).clearTransmitterPositions();
             currentTime++;
         }
@@ -167,6 +189,7 @@ public class Simulator {
             fw.write(csvHeader);
             fw.flush();
 
+            // This block is used to run different simulations serially with changing vehicle density
             int avgVehicleSpeedKMPH = 60;
             for (int vehiclesPerSegment = 8; vehiclesPerSegment <= 36; vehiclesPerSegment += 4) {
                 String logFilePath = String.format("%s/%d_%d.log", logDirectoryPath, vehiclesPerSegment, avgVehicleSpeedKMPH);
@@ -177,17 +200,18 @@ public class Simulator {
                 simulator.run();
                 simulator.printStatistics();
             }
-
-            // int averageVehiclePerSegment = 24;
-            // for (int vehicleSpeedKMPH = 30; vehicleSpeedKMPH <= 90; vehicleSpeedKMPH += 10) {
-            //     String logFilePath = String.format("%s/%d_%d.log", logDirectoryPath, averageVehiclePerSegment, vehicleSpeedKMPH);
-            //     PrintStream logFile = new PrintStream(new File(logFilePath));
-            //     System.setOut(logFile);
+            // Modify or comment out these blocks to run a simulation with required parameters, also see infrastructure/Config.java
+            // This block is used to run simulations with different avergage speeds
+            int averageVehiclePerSegment = 24;
+            for (int vehicleSpeedKMPH = 30; vehicleSpeedKMPH <= 90; vehicleSpeedKMPH += 10) {
+                String logFilePath = String.format("%s/%d_%d.log", logDirectoryPath, averageVehiclePerSegment, vehicleSpeedKMPH);
+                PrintStream logFile = new PrintStream(new File(logFilePath));
+                System.setOut(logFile);
                 
-            //     Simulator simulator = new Simulator(averageVehiclePerSegment, vehicleSpeedKMPH, fw);
-            //     simulator.run();
-            //     simulator.printStatistics(); 
-            // }
+                Simulator simulator = new Simulator(averageVehiclePerSegment, vehicleSpeedKMPH, fw);
+                simulator.run();
+                simulator.printStatistics(); 
+            }
             fw.close();
         } catch (IOException ioe) {
             System.err.println("IOException: " + ioe.getMessage());
